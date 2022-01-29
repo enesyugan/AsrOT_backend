@@ -1,0 +1,22 @@
+
+# Ignore confidential settings
+sec_settings.py
+
+# Ignore builds
+**/__pycache__
+
+# Ignore data
+**/data
+
+# Ignore db
+db.sqlite3
+
+# Ignore log file
+*.log
+
+# Ignore scripts
+worker_scripts/
+
+# Ignore our collectors
+worker_process_flask.py
+worker_process.py
