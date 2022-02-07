@@ -10,7 +10,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(_('email address'), unique=True)
     is_staff = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
-    date_joined = models.DateTimeField(default=timezone.now)
+    date_joined = models.DateTimeField(auto_now_add=True)
     last_login = models.DateTimeField(verbose_name='last login', auto_now=True)
     restricted_account = models.BooleanField(default=True)
 
