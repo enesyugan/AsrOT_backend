@@ -21,14 +21,13 @@ base_path = sec_settings.server_base_path
 def vtt_set(file_path, vtt_data, user, task_instance=None):
     with open(file_path, "wb") as f:
         f.write(vtt_data.encode('utf-8'))
-   
+    if user.id == None:
+        user = selectors.get_user_list(filters={'email': "unkown@unkown.com"}).last()
+    print(f"services: vtt_set: {user}")
     model = models.TranscriptionCorrection(task_id=task_instance,
                                     user=user,
                                     transcription_correction=file_path)    
-    #else:
-     #   model = models.TranscriptionCorrection(
-      #                              user=user,
-       #                             transcription_correction=file_path)    
+    
     try:
         model.full_clean()
     except Exception as e:

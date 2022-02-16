@@ -1,4 +1,17 @@
 from . import models
+from users.models import CustomUser
+
+def get_user_list(*, filters=None):
+    filters = filters or {}
+
+    qs = CustomUser.objects.all()
+    return qs.filter(**filters)
+
+def correction_list(*, filters=None):
+    filters = filters or {}
+
+    qs = models.TranscriptionCorrection.objects.all()
+    return qs.filter(**filters)
 
 def task_list(*, filters=None):
     filters = filters or {}
