@@ -4,31 +4,10 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 
-from django.http import QueryDict
-from django.core.files.uploadedfile import InMemoryUploadedFile, TemporaryUploadedFile
-from django.shortcuts import render
-from django.core.files.storage import default_storage
-from django.core.files.base import ContentFile
-from django.http import HttpResponse
-from wsgiref.util import FileWrapper
-
-
-from pydub import AudioSegment
 from pathlib import Path
-from datetime import datetime, timedelta
-from threading import Thread
-from multiprocessing import Process
-import numpy as np
-import tempfile
-import subprocess
-import base64
+from datetime import datetime
 import os
-import wave
-import uuid
-import sys
-import requests
 
-#from . import workers
 from users.models import CustomUser
 from . import models
 from . import services
@@ -38,6 +17,7 @@ from AsrOT import settings, sec_settings
 base_data_path_unk = sec_settings.base_data_path_unk
 base_data_path = sec_settings.base_data_path
 server_base_path = sec_settings.server_base_path
+
 
 class SetVttCorrectionApi(APIView):
     permission_classes = [IsAuthenticated]
@@ -225,183 +205,31 @@ class CreateTaskApi(APIView):
 
     class InputSerializer(rf_serializers.Serializer):
         taskName = rf_serializers.CharField(required=True)
-        audioFile = rf_serializers.CharField(required=True)
+        audioFile = rf_serializers.FileField(required=True)
         sourceLanguage = rf_serializers.CharField(max_length=500, required=True)
-     #   translationLanguage = rf_serializers.CharField(max_length=500, required=False)
+        #translationLanguage = rf_serializers.CharField(max_length=500, required=False)
 
+        def validate_sourceLanguage(self, value):
+            if not value in settings.languages_supported:
+                raise rf_serializers.ValidationError({"sourceLanguage": "You need to define one of the valid languages {}"\
+						.format(settings.languages_supported)})
+            return value
 
-    def convert_to_wav(self, source, ext):
-        err={}
-        with tempfile.NamedTemporaryFile(mode='w+b', suffix=ext) as sourcefile, \
-		tempfile.NamedTemporaryFile(mode='r+b', suffix='.wav') as resultfile:
-
-            sourcefile.write(source)
-
-            command = ['ffmpeg', '-nostdin', '-y', '-i', sourcefile.name, '-acodec', 'pcm_s16le', '-ar', '16000', '-ac', '1', resultfile.name]
-            p = subprocess.run(command, text=True, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            data_byte=resultfile.read()
-            try:
-                sound = AudioSegment.from_wav(resultfile)
-                sound = sound.set_frame_rate(16000)
-                data_ = np.fromstring(sound._data, np.int16)
-                data_ = base64.b64encode(data_)
-            except Exception as e:
-                #logger.error("STT error reading file: {}".format(e))
-                print("error: {}".format(e))
-                err['media processing'] = str(e)
-                data_ = bytearray("error")
-
-            return (data_.decode('latin-1'), data_byte, '---STDOUT---\n' + p.stdout + '\n---STDERR---\n' + p.stderr, err )
-
-    def write_log(self, logFile, log, err=""):
-        with open(logFile, "w") as logfile:
-            logfile.write(log)
-            logfile.write("\n\n====\n====\n\n")            
-            logfile.write(err)
-            
 
     def post(self, request):
 
-        data = request.data
-       # data_path = base_data_path + str(request.user)
-        data_path = base_data_path 
-        print(data_path)
-        if not 'sourceLanguage' in data or not data['sourceLanguage'] in settings.languages_supported:
-            raise rf_serializers.ValidationError({"sourceLanguage": "You need to define one of the valid languages {}"\
-						.format(settings.languages_supported)})        
-        if not 'taskName' in data or not data['taskName']:
-            raise rf_serializers.ValidationError({"taskName": "You need define a task name"})        
-            
- #       logger.info("request is secure: {}".format(request.is_secure()))
-        print(request.is_secure())
-        
-        try:
-            data['audioFile']
-        except Exception as e:
-            raise rf_serializers.ValidationError({"audioFile": "A media file needs to be send"})        
+        print(request.is_secure())     
 
-        if not isinstance(data, QueryDict):
-            tmp = data
-            data = QueryDict('', mutable=True)
-            data.update(tmp)
-
-        if isinstance(data['audioFile'], (bytes, bytearray)):
-            audio = data['audioFile'].decode('latin-1')
-            data['audioFile'] = audio
-
-        else:
-            uploaded_file = data['audioFile']
-           # logger.info("File content_type: {}".format(uploaded_file.content_type))
-           # logger.info("File contentt_type.split(/): {}".format(uploaded_file.content_type.split('/')[0]))
-           # logger.info("uploaded_file.name: {}".format(uploaded_file.name))
-
-           # print("File content_type: {}".format(uploaded_file.content_type))
-           # print("File contentt_type.split(/): {}".format(uploaded_file.content_type.split('/')[0]))
-           # print("uploaded_file.name: {}".format(uploaded_file.name))
-           # print(uploaded_file.size)
-            ext = Path(uploaded_file.name).suffix
-            file_name = Path(uploaded_file.name).stem
-            file_name = file_name.replace('/','_').replace('\\','_')
-            now = datetime.now()
-            date_time = now.strftime("%Y_%m_%d_%H_%M_%S")
-            file_name = "{}-{}".format(file_name, date_time)
-           # data_path = data_path + "/" + file_name + "_" + date_time
-            data_path = data_path + "/" + data['sourceLanguage'].upper() + "/datoid" 
-            print(data_path)
-            #result_dir = data_path + "/results"            
-            wav_dir = data_path + "/wav"
-            log_dir = data_path + "/log/{}".format(file_name)
-
-            uid = uuid.uuid4()
-            file_sizemb = (uploaded_file.size // 1000000)
-            print("File size: {} mb".format(file_sizemb))
-            print(request.user)
-            print(request.user.restricted_account)
-            if request.user.restricted_account:
-                if file_sizemb > 10:
-                    raise rf_serializers.ValidationError({"file size": "You have a restricted account. Your media file must be smaller than 10 mb. Please write an email to administrators to allow for unlimited upload size."})                  
-
-            if isinstance(data['audioFile'], InMemoryUploadedFile):
-                audio = (uploaded_file.file).getvalue()
-            if isinstance(data['audioFile'], TemporaryUploadedFile):
-                uploaded_file.seek(0)
-                audio = uploaded_file.read()
-
-            audio_str, audio_bytes, log, pydub_err = self.convert_to_wav(audio, ext)
-            #session = requests.Session()
-            #responseTest = requests.post('http://i13hpc29.ira.uka.de:8080/ai_worker/ar_asr', data= dict(audio_bytes=audio_bytes))
-            #print(responseTest)
-            #print(responseTest.json())
-            #print(type(responseTest.json()))
-            #print(responseTest.json()['transcription'])
-            #print("99999999")
-            if not os.path.exists(wav_dir):
-                os.makedirs(wav_dir)
-            if not os.path.exists(data_path + "/seg"):
-                os.makedirs(data_path + "/seg")
-            if not os.path.exists(data_path + "/txt"):
-                os.makedirs(data_path + "/txt")
-            if not os.path.exists(data_path + "/hypo-vtt"):
-                os.makedirs(data_path + "/hypo-vtt")
-            if not os.path.exists(log_dir):
-                os.makedirs(log_dir)
-
-            conversion_log = log_dir + "/conversion.log"
-
-            if pydub_err:
-                err = ""
-                for key, value in pydub_err.items():
-                    err += "{} : {} \n".format(key,value)
-                self.write_log(conversion_log, log, err)
-                return Response(pydub_err, status=status.HTTP_400_BAD_REQUEST)
-
-            wav_path = wav_dir+"/{}.wav".format(file_name)
-            obj = wave.open(wav_path,'wb')
-            obj.setnchannels(1)
-            obj.setsampwidth(2)
-            obj.setframerate(16000)
-            obj.writeframesraw(base64.b64decode(audio_str.strip()))
-            obj.close()
-            print("Wav of original media file saved to: {}".format(wav_path))
-            data['audioFile'] = audio_str
-            print("nach data")
-       # else:
-       #    # print(data['audioFile'][0:300])
-       #     data__ = data['audioFile'].encode('latin-1')
-       #     print(type(data__))
-       #    # print(data__[0:300])
-       #     print(type(data['audioFile']))
-
-        serializer = self.InputSerializer(data=data)
-        print("nach serializer")
+        serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        print("serializer is valid")
-        serializer.validated_data['sourceLanguage'] = serializer.validated_data['sourceLanguage'].lower()
-        print("nach langguag set")
-        date_time = now.strftime('%Y-%m-%d %H:%M:%S')
-        #services.pipe(serializer=serializer, user=request.user, uid=uid, audio_filename=file_name, data_path=data_path, date_time=now.strftime("%Y-%m-%d %H:%M:%S"), audio_bytes=audio_bytes)
-        service_data = {"serializer":serializer, 
-			"user": request.user,
-			"uid": uid,
-			"file_size": uploaded_file.size,
-			"audio_filename": file_name,
-			"data_path": data_path,
-			"log_dir": log_dir,
-			"date_time": date_time, 
-			"audio_bytes": audio_bytes}
-        print("for process")
-        #p = Process(target=services.pipe, args=(service_data,))
-        thread = Thread(target =services.pipe, args=(service_data,))
-        thread.start()
-        print(sys.version)
-        print(sys.path)
-        print(sys.version_info)
-        print("process definede")
-       # try:
-        #    p.start()
-        #except Exception as e:
-        #    print(e)
-        print("process started")
-        return Response({'taskId': uid}, status=status.HTTP_200_OK)
+
+        task = services.create_task(
+            task_name=serializer.validated_data['taskName'],
+            user=request.user,
+            audiofile=serializer.validated_data['audioFile'],
+            language=serializer.validated_data['sourceLanguage']
+        )
+        
+        return Response({'taskId': task.task_id}, status=status.HTTP_200_OK)
         
 

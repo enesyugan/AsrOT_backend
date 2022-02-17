@@ -23,3 +23,9 @@ worker_process.py
 
 # Ignore database migrations
 migrations/
+
+# Ignore local virtual environments
+venv/
+
+# Ignore data files
+media/
