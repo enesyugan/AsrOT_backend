@@ -47,6 +47,35 @@ def create_task(task_name, user, audiofile, language):
     return new_task
 
 
+def create_correction_clip(task_id, user, audio, 
+  original_text, corrected_text, context_before, context_after, 
+  context_start, text_start, text_end, context_end, ):
+
+    task = models.TranscriptionTask.objects.get(task_id=task_id)
+
+    new_clip = models.CommandClip(
+        user=user,
+        task=task,
+        audio=audio,
+        original_text=original_text,
+        corrected_text=corrected_text,
+        context_before=context_before,
+        context_after=context_after,
+        context_start=context_start,
+        text_start=text_start,
+        text_end=text_end,
+        context_end=context_end,
+    )
+
+    try:
+        new_clip.full_clean()
+    except Exception as e:
+        raise rf_serializers.ValidationError(e)
+    new_clip.save()
+
+    return new_clip
+
+
 
 
 

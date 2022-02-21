@@ -12,6 +12,7 @@ basic_pattern = [
         path(sec_settings.getvtt_api, views.GetVttApi.as_view(), ),
         path(sec_settings.gettext_api, views.GetTextApi.as_view(), ), 
         path(sec_settings.setvttcorrection_api, views.SetVttCorrectionApi.as_view(), ),
+        path('commandclips/', views.CreateCorrectionClipView.as_view(), )
 ]
 
 urlpatterns = [

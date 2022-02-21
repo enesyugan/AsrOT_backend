@@ -233,3 +233,45 @@ class CreateTaskApi(APIView):
         return Response({'taskId': task.task_id}, status=status.HTTP_200_OK)
         
 
+
+class CreateCorrectionClipView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    class InputSerializer(rf_serializers.Serializer):
+        taskID = rf_serializers.UUIDField()
+        commandClip = rf_serializers.FileField()
+
+        originalText = rf_serializers.CharField()
+        correctedText = rf_serializers.CharField()
+        prevContext = rf_serializers.CharField(allow_blank=True)
+        succContext = rf_serializers.CharField(allow_blank=True)
+
+        beginContext = rf_serializers.TimeField()
+        beginText = rf_serializers.TimeField()
+        endText = rf_serializers.TimeField()
+        endContext = rf_serializers.TimeField()
+
+        def validate_taskID(self, value):
+            if not models.TranscriptionTask.objects.filter(task_id=value).exists():
+                raise rf_serializers.ValidationError({'taskID': 'Must point to a valid task iD'})
+            return value
+
+
+        
+    def post(self, request, *args, **kwargs):
+        serializer = self.InputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        clip = services.create_correction_clip(
+            user=self.request.user,
+            task_id=serializer.validated_data['taskID'],
+            audio=serializer.validated_data['commandClip'],
+            original_text=serializer.validated_data['originalText'],
+            corrected_text=serializer.validated_data['correctedText'],
+            context_before=serializer.validated_data['prevContext'],
+            context_after=serializer.validated_data['succContext'],
+            context_start=serializer.validated_data['beginContext'],
+            text_start=serializer.validated_data['beginText'],
+            text_end=serializer.validated_data['endText'],
+            context_end=serializer.validated_data['endContext'],
+        )
+        return Response({}, status=status.HTTP_200_OK)
