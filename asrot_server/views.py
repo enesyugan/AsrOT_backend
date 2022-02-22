@@ -64,7 +64,8 @@ class SetVttCorrectionApi(APIView):
         print("Uploading corrected vtt: {}".format(correct_vtt_path))
         services.vtt_set(correct_vtt_path, vtt_data, request.user, task_instance)
         return Response({}, status=status.HTTP_200_OK)
-        
+
+     
 
 ### Every user can ask with his token other peoples tasks
 ## check if task with task_id exists for user than return (ist es sein task)
@@ -72,131 +73,113 @@ class GetTaskStatusApi(APIView):
     permission_classes = [IsAuthenticated]
     
     class InputSerializer(rf_serializers.Serializer):
-        taskId = rf_serializers.CharField(required=True)
+        taskId = rf_serializers.UUIDField(required=True)
+
+        def validate_taskId(self, value):
+            if not models.TranscriptionTask.objects.filter(task_id=value).exists():
+                raise rf_serializers.ValidationError({'taskId': 'Must point to a valid task iD'})
+            return value
+
 
     class OutputSerializer(rf_serializers.Serializer):
-        status = rf_serializers.CharField(max_length=1000)
+        status = rf_serializers.CharField()
 
+
+    #TODO this should be a GET request, with the id passed in either the URL or the query_params
     def post(self, request):
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        model = models.TranscriptionTask.objects.filter(task_id=serializer.validated_data['taskId']).last()
-        if model == None:
-            return Response({'error': "No file with given taskId was saved to database"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-        t_status = model.status
-        out_data={}
-        out_data['status'] = t_status
-        out_serializer = self.OutputSerializer(data=out_data)
-        out_serializer.is_valid(True)
-        return Response({'status': out_serializer.data}, status=status.HTTP_200_OK)
+        task = models.TranscriptionTask.objects.get(task_id=serializer.validated_data['taskId'])
+
+        out_serializer = self.OutputSerializer(instance=task)
+        return Response(out_serializer.data, status=status.HTTP_200_OK)
+
+
 
 class GetTasksApi(APIView):
     permission_classes = [IsAuthenticated]
 
     class OutputSerializer(rf_serializers.Serializer):
         user = CustomUser
-        task_id = rf_serializers.CharField(max_length=500)
-        file_size = rf_serializers.IntegerField()
-        task_name = rf_serializers.CharField(max_length=500)
-        audio_filename = rf_serializers.CharField(max_length=1000)
-        data_path = rf_serializers.CharField(max_length=1000)
-        status = rf_serializers.CharField(max_length=500)
+        task_id = rf_serializers.CharField()
+        file_size = rf_serializers.IntegerField(source='audio_filesize')
+        task_name = rf_serializers.CharField()
+        audio_filename = rf_serializers.CharField()
+        status = rf_serializers.CharField()
         date_time = rf_serializers.DateTimeField()
-        language = rf_serializers.CharField(max_length=500)
+        language = rf_serializers.CharField()
+
 
     def get(self, request):
         tasks = selectors.task_list(filters={'user':request.user})
         out_serializer = self.OutputSerializer(tasks, many=True)
         return Response({"tasks": out_serializer.data}, status=status.HTTP_200_OK)
 
+
+### Every user can ask with his token other peoples tasks
+## check if task with task_id exists for user than return (ist es sein task)
 class GetTextApi(APIView):
     permission_classes = [IsAuthenticated]
 
     class InputSerializer(rf_serializers.Serializer):
         taskId = rf_serializers.CharField(required=True)
 
+        def validate_taskId(self, value):
+            if not models.TranscriptionTask.objects.filter(task_id=value).exists():
+                raise rf_serializers.ValidationError({'taskId': 'Must point to a valid task iD'})
+            return value
+
+
     class OutputSerializer(rf_serializers.Serializer):
         text = rf_serializers.CharField()
         audio_filename = rf_serializers.CharField()
 
+
+    #TODO this should be a GET request, with the id passed in either the URL or the query_params
     def post(self, request):
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        model = models.TranscriptionTask.objects.filter(task_id=serializer.validated_data['taskId']).last()
-        if model == None:
-            return Response({'error': "There is no task with given taskId."} \
-				, status=status.HTTP_503_SERVICE_UNAVAILABLE) 
-        transcriptionHypo = model.text_hypo
+        task = models.TranscriptionTask.objects.get(task_id=serializer.validated_data['taskId'])
 
-        if not transcriptionHypo:
-            return Response({'error': "There is no text file related to the given taskId. The task may still be in progress"} \
-				, status=status.HTTP_503_SERVICE_UNAVAILABLE) 
+        if not task.txt_file:
+            return Response({'error': "There is no text file related to the given taskId. The task may still be in progress"}, 
+                            status=status.HTTP_404_NOT_FOUND) 
 
-        encoding = model.encoding
-        try:
-            text_file = [line.decode(encoding) for line in open(transcriptionHypo, 'rb').readlines()]
-        except Exception as e:
-            print("GET TEXT ERROR: {}".format(e))
-            return Response({'error': "Failed to decode text file. There seems to be a encoding mismatch."} \
-				, status=status.HTTP_503_SERVICE_UNAVAILABLE) 
-            
-        print(text_file)
-        text_file = "".join(text_file)
-        file_name = Path(transcriptionHypo).stem
-        out_data={}
-        out_data['audio_filename'] = file_name
-        out_data['text'] = text_file
-        out_serializer = self.OutputSerializer(data=out_data)
-        out_serializer.is_valid(True)
+        out_serializer = self.OutputSerializer(instance=task)
         return Response(out_serializer.data, status=status.HTTP_200_OK)
         
 
 
 ### Every user can ask with his token other peoples tasks
 ## check if task with task_id exists for user than return (ist es sein task)
-
 class GetVttApi(APIView):
     permission_classes = [IsAuthenticated]
 
     class InputSerializer(rf_serializers.Serializer):
         taskId = rf_serializers.CharField(required=True)
 
+        def validate_taskId(self, value):
+            if not models.TranscriptionTask.objects.filter(task_id=value).exists():
+                raise rf_serializers.ValidationError({'taskId': 'Must point to a valid task iD'})
+            return value
+
+
     class OutputSerializer(rf_serializers.Serializer):
         vtt = rf_serializers.CharField()
  
+
+    #TODO this should be a GET request, with the id passed in either the URL or the query_params
     def post(self, request):
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         ## should be in selectors.py
-        model = models.TranscriptionTask.objects.filter(task_id=serializer.validated_data['taskId']).last()
-        if model == None:
-            return Response({'error': "There is no task with given taskId."} \
-				, status=status.HTTP_503_SERVICE_UNAVAILABLE) 
-        transcriptionHypo = model.transcription_hypo
-        if not transcriptionHypo:
-            return Response({'error': "There is no vtt file related to the given taskId. The task may still be in progress"} \
-				, status=status.HTTP_503_SERVICE_UNAVAILABLE) 
+        task = models.TranscriptionTask.objects.get(task_id=serializer.validated_data['taskId'])
+        if not task.vtt_file:
+            return Response({'error': "There is no vtt file related to the given taskId. The task may still be in progress"}, 
+                            status=status.HTTP_404_NOT_FOUND) 
 
-        encoding = model.encoding
-        try:
-            vtt_file = [line.decode(encoding) for line in open(transcriptionHypo, 'rb').readlines()]
-        except Exception as e:
-            print("GET VTT ERROR: {}".format(e))
-            return Response({'error': "Failed to decode vtt file. There seems to be a encoding mismatch."} \
-				, status=status.HTTP_503_SERVICE_UNAVAILABLE) 
-            
-
-        vtt_file = "".join(vtt_file)
-        file_name = Path(transcriptionHypo).stem
-        out_data={}
-        out_data['vtt'] = vtt_file
-        out_serializer = self.OutputSerializer(data=out_data)
-        out_serializer.is_valid(True)
+        out_serializer = self.OutputSerializer(instance=task)
         return Response(out_serializer.data, status=status.HTTP_200_OK)
-
-        #response = HttpResponse(FileWrapper(vtt_file), content_type='application/txt')
-        #response['Content-Disposition'] = 'attachment; filename="%s"' % file_name
-        #return response
 
 
 

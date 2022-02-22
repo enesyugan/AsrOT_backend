@@ -1,11 +1,13 @@
 from django.db import models
 from django.contrib import auth
 
-import uuid, pathlib, functools
+from functools import partial as part
+import uuid, pathlib
+
 
 
 def base_path(instance):
-    return pathlib.Path('known')/instance.language.upper()
+    return pathlib.PurePath('known')/instance.language.upper()
 
 def upload_data(instance, fn, filetype):
     sub_dir = {
@@ -22,7 +24,6 @@ def upload_logs(instance, fn, filetype):
 
 
 class TranscriptionTask(models.Model):
-    #TODO changing primary key requires resetting database
     task_id = models.UUIDField(default=uuid.uuid4, primary_key=True, editable=False) ## mit uuid ein id generieren dann kann man darüber bspw status abfrage machen
     user = models.ForeignKey(auth.get_user_model(), on_delete=models.CASCADE)
     task_name = models.CharField(max_length=500)
@@ -34,22 +35,33 @@ class TranscriptionTask(models.Model):
     language = models.CharField(max_length=500, null=False)
 
     #`blank=True` `null=True` since the files are created and saved later in the pipeline
-    wav_file = models.FileField(upload_to=functools.partial(upload_data, filetype='wav'), blank=True, null=True)
-    seg_file = models.FileField(upload_to=functools.partial(upload_data, filetype='seg'), blank=True, null=True)
-    stm_file = models.FileField(upload_to=functools.partial(upload_data, filetype='stm'), blank=True, null=True)
-    txt_file = models.FileField(upload_to=functools.partial(upload_data, filetype='txt'), blank=True, null=True)
-    vtt_file = models.FileField(upload_to=functools.partial(upload_data, filetype='vtt'), blank=True, null=True)
+    wav_file = models.FileField(upload_to=part(upload_data, filetype='wav'), blank=True, null=True)
+    seg_file = models.FileField(upload_to=part(upload_data, filetype='seg'), blank=True, null=True)
+    stm_file = models.FileField(upload_to=part(upload_data, filetype='stm'), blank=True, null=True)
+    txt_file = models.FileField(upload_to=part(upload_data, filetype='txt'), blank=True, null=True)
+    vtt_file = models.FileField(upload_to=part(upload_data, filetype='vtt'), blank=True, null=True)
 
-    conversion_log = models.FileField(upload_to=functools.partial(upload_logs, filetype='conversion'), blank=True, null=True)
-    seg_log = models.FileField(upload_to=functools.partial(upload_logs, filetype='segmentation'), blank=True, null=True)
-    asr_log = models.FileField(upload_to=functools.partial(upload_logs, filetype='asr'), blank=True, null=True)
-    vtt_log = models.FileField(upload_to=functools.partial(upload_logs, filetype='vtt'), blank=True, null=True)
+    conversion_log = models.FileField(upload_to=part(upload_logs, filetype='conversion'), blank=True, null=True)
+    seg_log = models.FileField(upload_to=part(upload_logs, filetype='segmentation'), blank=True, null=True)
+    asr_log = models.FileField(upload_to=part(upload_logs, filetype='asr'), blank=True, null=True)
+    vtt_log = models.FileField(upload_to=part(upload_logs, filetype='vtt'), blank=True, null=True)
 
     def __str__(self):
         return str(self.audio_filename) + ' language: ' + str(self.language)
 
     def clean(self):
         self.language = self.language.lower()
+
+    @property
+    def text(self):
+        with self.txt_file.open('r') as file:
+            return file.read()
+
+    @property
+    def vtt(self):
+        with self.vtt_file.open('r') as file:
+            return file.read()
+
 
 
 
