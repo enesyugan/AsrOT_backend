@@ -1,13 +1,17 @@
+import datetime
 from django.db import models
 from django.contrib import auth
+from django.core.files.storage import default_storage
 
 from functools import partial as part
 import uuid, pathlib
 
+from AsrOT import sec_settings
+
 
 
 def base_path(instance):
-    return pathlib.PurePath('known')/instance.language.upper()
+    return pathlib.PurePath(sec_settings.base_data_path)/instance.language.upper()
 
 def upload_media(instance, fn):
     filename = pathlib.PurePath(fn)
@@ -29,7 +33,7 @@ def upload_logs(instance, fn, filetype):
 
 class TranscriptionTask(models.Model):
     task_id = models.UUIDField(default=uuid.uuid4, primary_key=True, editable=False) ## mit uuid ein id generieren dann kann man darüber bspw status abfrage machen
-    user = models.ForeignKey(auth.get_user_model(), on_delete=models.CASCADE)
+    user = models.ForeignKey(auth.get_user_model(), on_delete=models.CASCADE, related_name='owned_tasks')
     task_name = models.CharField(max_length=500)
     audio_filename = models.CharField(max_length=1000, null=False)
     audio_filesize = models.IntegerField(null=False)
@@ -69,16 +73,37 @@ class TranscriptionTask(models.Model):
 
 
 
+def upload_correction(instance, fn):
+    filename = pathlib.PurePath(fn)
+
+    if instance.task != None:
+        # Changing the name can't be done in a Storage class, since it should only be used for task-related files
+        i = 0
+        base_name = base_path(instance.task)/"correct-vtt"
+        file_name = base_name/f'{instance.task.audio_filename}__{i:03d}.vtt'
+        while default_storage.exists(file_name):
+            i += 1
+            file_name = base_name/f'{instance.task.audio_filename}__{i:03d}.vtt'
+        return str(file_name)     
+    else:
+        now = datetime.datetime.now()
+        return pathlib.PurePath(sec_settings.base_data_path_unk)/str(instance.user)/'origin_unknown'/ \
+            f'{filename}_correction-{now.strftime("%Y_%m_%d_%H_%M_%S")}.vtt'
 
 class TranscriptionCorrection(models.Model):
-    user = models.ForeignKey(auth.get_user_model(), on_delete=models.CASCADE)
-    task_id = models.ForeignKey(TranscriptionTask, on_delete=models.CASCADE, blank=True, null=True)
-    transcription_correction = models.CharField(max_length=1000, blank=False)    
+    user = models.ForeignKey(auth.get_user_model(), on_delete=models.CASCADE, related_name='corrections')
+    task = models.ForeignKey(TranscriptionTask, on_delete=models.CASCADE, related_name='corrections', blank=True, null=True)
+    correction_file = models.FileField(upload_to=upload_correction)
     first_commit = models.DateTimeField(auto_now_add=True)
     last_commit = models.DateTimeField(verbose_name='last upload', auto_now=True)
     
     def __str__(self):
         return str(self.user) + 'correction done task_id: ' + str(self.task_id)
+
+    @property
+    def vtt(self):
+        with self.correction_file.open('r') as file:
+            return file.read()
 
 
 
@@ -90,8 +115,8 @@ def upload_audio(instance, fn):
 
 class CommandClip(models.Model):
     created = models.DateTimeField(auto_now_add=True)
-    user = models.ForeignKey(auth.get_user_model(), on_delete=models.CASCADE)
-    task = models.ForeignKey(TranscriptionTask, on_delete=models.CASCADE)
+    user = models.ForeignKey(auth.get_user_model(), on_delete=models.CASCADE, related_name='clips')
+    task = models.ForeignKey(TranscriptionTask, on_delete=models.CASCADE, related_name='clips')
 
     audio = models.FileField(upload_to=upload_audio)
 

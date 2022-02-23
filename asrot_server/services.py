@@ -1,5 +1,6 @@
 from rest_framework import serializers as rf_serializers
-from django.core.files import uploadedfile
+from django.core.files import base, uploadedfile
+from django.contrib import auth
 
 from . import models, utils, selectors
 
@@ -77,27 +78,38 @@ def create_correction_clip(task_id, user, audio,
     return new_clip
 
 
+def create_vtt_correction(user, vtt_data, task_id, vtt_name):
 
-
-
-
-def vtt_set(file_path, vtt_data, user, task_instance=None):
-    with open(file_path, "wb") as f:
-        f.write(vtt_data.encode('utf-8'))
-    if user.id == None:
-        user = selectors.get_user_list(filters={'email': "unkown@unkown.com"}).last()
-    print(f"services: vtt_set: {user}")
-    model = models.TranscriptionCorrection(task_id=task_instance,
-                                    user=user,
-                                    transcription_correction=file_path)    
+    if task_id is None:
+        for line in vtt_data.split('\n'):
+                if "NOTE task_id:" in line: 
+                    task_id = line.strip().split()[-1]
+                    print("TASK ID: {}".format(task_id))
+                    break
     
+    if task_id is None:
+        task = None
+    else:
+        task = models.TranscriptionTask.objects.get(task_id=task_id)
+
+    if user.id is None:
+        #TODO this should be detached by accessing USERNAME_FIELD
+        user, _ = auth.get_user_model().objects.get_or_create(email='unknown@unknown.com')
+
+    vtt_file = base.ContentFile(vtt_data, vtt_name)
+
+    correction = models.TranscriptionCorrection(
+        user=user,
+        correction_file=vtt_file,
+        task=task,
+    )
+
     try:
-        model.full_clean()
+        correction.full_clean()
     except Exception as e:
         raise rf_serializers.ValidationError(e)
-    model.save()
+    correction.save()
 
-
-
+    return correction
 
 

@@ -1,4 +1,3 @@
-import pathlib
 from rest_framework.views import APIView
 from rest_framework import serializers as rf_serializers
 from rest_framework.response import Response
@@ -7,7 +6,7 @@ from rest_framework.permissions import IsAuthenticated
 
 from django import http
 
-from pathlib import Path
+import pathlib
 from datetime import datetime
 import os
 import wave
@@ -32,48 +31,34 @@ class GetCorrectedVttApi(APIView):
     class InputSerializer(rf_serializers.Serializer):
         taskId = rf_serializers.CharField(required=True)
 
+        def validate_taskId(self, value):
+            if not models.TranscriptionTask.objects.filter(task_id=value).exists():
+                raise rf_serializers.ValidationError({'taskId': 'Must point to a valid task iD'})
+            return value
+
+
     class OutputSerializer(rf_serializers.Serializer):
         vtt = rf_serializers.CharField()
  
+
     def post(self, request):
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        ## should be in selectors.py
-        model = models.TranscriptionTask.objects.filter(task_id=serializer.validated_data['taskId']).last()
-        if model == None:
-            return Response({'error': "There is no task with given taskId."} \
-				, status=status.HTTP_503_SERVICE_UNAVAILABLE)         
+        ## TODO should be in selectors.py
+        task = models.TranscriptionTask.objects.get(task_id=serializer.validated_data['taskId'])
+        
+        if not task.corrections.all().exists():
+            return Response({'error': "No corrected file for given task"}, status=status.HTTP_404_NOT_FOUND)
 
-        encoding = model.encoding
-        data_path = model.data_path
-        file_name = model.audio_filename
-        print(data_path)
-        print(f"{data_path}/correct-vtt/{file_name}")
-        corrected_files = glob.glob(os.path.join(data_path, 'correct-vtt', f"{file_name}*"))
-        print("2")
-        if not corrected_files:
-            return Response({'error': "No corrected file for given task"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
-        print(corrected_files)
-        corrected_files.sort(key=os.path.getmtime) 
-        print(corrected_files)    
-        try:
-            vtt_file = [line.decode(encoding) for line in open(corrected_files[-1], 'rb').readlines()]
-        except Exception as e:
-            print("GET VTT ERROR: {}".format(e))
-            return Response({'error': "Failed to decode vtt file. There seems to be a encoding mismatch."} \
-				, status=status.HTTP_503_SERVICE_UNAVAILABLE) 
-            
+        ## TODO should be in selectors.py 
+        correction = task.corrections.all().order_by('-last_commit').first()
 
-        vtt_file = "".join(vtt_file)
-        file_name = Path(corrected_files[-1]).stem
-        out_data={}
-        out_data['vtt'] = vtt_file
-        out_serializer = self.OutputSerializer(data=out_data)
-        out_serializer.is_valid(True)
+        out_serializer = self.OutputSerializer(instance=correction)
         return Response(out_serializer.data, status=status.HTTP_200_OK)
 
 
-
+### Every user can ask with his token other peoples tasks
+## check if task with task_id exists for user than return (ist es sein task)
 class GetTaskApi(APIView):
  
     class OutputSerializer(rf_serializers.Serializer):
@@ -107,50 +92,28 @@ class SetVttCorrectionApi(APIView):
 
     class InputSerializer(rf_serializers.Serializer):
         vtt = rf_serializers.CharField(required=True)
-        task_id = rf_serializers.CharField(required=False, max_length=500)
-        vtt_name = rf_serializers.CharField(required=False, max_length=500)
+        task_id = rf_serializers.UUIDField(required=False, default=None)
+        vtt_name = rf_serializers.CharField(required=False, max_length=500, default='unk')
+
+        def validate_task_id(self, value):
+            if value is None:
+                return value
+            if not models.TranscriptionTask.objects.filter(task_id=value).exists():
+                raise rf_serializers.ValidationError({'task_id': 'Must point to a valid task iD'})
+            return value
+
 
     def post(self, request):
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        vtt_data = serializer.validated_data['vtt']
-        correct_vtt_path = None
-        task_instance = None
-        task_id = None
-        if serializer.validated_data.get('task_id', None) != None:
-            task_id = serializer.validated_data['task_id']
-        else:
-            for line in vtt_data.split('\n'):
-                if "NOTE task_id:" in line: 
-                    task_id = line.strip().split()[-1]
-                    print("TASK ID: {}".format(task_id))
-                    break
-       
-        if task_id != None:
-            task_instance = selectors.path_get(filters={'task_id':task_id})#line.strip().split()[-1]
-            if task_instance:
-                print("VTT found: {}".format(task_instance))
-                data_path = task_instance.data_path
-                correct_vtt_path = data_path + "/correct-vtt"
-                if not os.path.exists(correct_vtt_path):
-                    os.makedirs(correct_vtt_path)
-                i=0
-                while os.path.exists(f"{correct_vtt_path}/{task_instance.audio_filename}_{i}.vtt"):
-                    i += 1
-                correct_vtt_path = f"{correct_vtt_path}/{task_instance.audio_filename}_{i}.vtt"
-                #correct_vtt_path = correct_vtt_path + "/{}.vtt".format(task_instance.audio_filename)  
-            
-        print("SetVTT: {} ".format(task_id))
-        if correct_vtt_path == None:
-            print("Vtt not found using name: {}".format(serializer.validated_data.get('vtt_name', 'unk')))
-            correct_vtt_path = base_data_path_unk + str(request.user) + "/origin_unknown"
-            if not os.path.exists(correct_vtt_path):
-                os.makedirs(correct_vtt_path)
-            
-            correct_vtt_path = correct_vtt_path + "/" + serializer.validated_data.get('vtt_name', 'unk') + "_correction{}.vtt".format(datetime.now().strftime("%Y_%m_%d_%H_%M_%S"))
-        print("Uploading corrected vtt: {}".format(correct_vtt_path))
-        services.vtt_set(correct_vtt_path, vtt_data,  request.user, task_instance)
+        correction = services.create_vtt_correction(
+            user=request.user,
+            vtt_data=serializer.validated_data['vtt'],
+            task_id=serializer.validated_data['task_id'],
+            vtt_name=serializer.validated_data['vtt_name'],
+        )
+
         return Response({}, status=status.HTTP_200_OK)
 
      
