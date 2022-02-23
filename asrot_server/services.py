@@ -1,7 +1,7 @@
 from rest_framework import serializers as rf_serializers
 from django.core.files import uploadedfile
 
-from . import models, utils
+from . import models, utils, selectors
 
 from datetime import datetime
 import pathlib, threading
@@ -28,6 +28,7 @@ def create_task(task_name, user, audiofile, language):
         audio_filename=file_name,
         audio_filesize=file_sizemb,
         language=language,
+        media_file=audiofile,
     )
     try:
         new_task.full_clean()

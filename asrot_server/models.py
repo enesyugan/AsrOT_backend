@@ -9,6 +9,10 @@ import uuid, pathlib
 def base_path(instance):
     return pathlib.PurePath('known')/instance.language.upper()
 
+def upload_media(instance, fn):
+    filename = pathlib.PurePath(fn)
+    return base_path(instance)/'media'/f'{instance.audio_filename}{filename.suffix}'
+
 def upload_data(instance, fn, filetype):
     sub_dir = {
         'wav': 'wav',
@@ -35,6 +39,7 @@ class TranscriptionTask(models.Model):
     language = models.CharField(max_length=500, null=False)
 
     #`blank=True` `null=True` since the files are created and saved later in the pipeline
+    media_file = models.FileField(upload_to=upload_media)
     wav_file = models.FileField(upload_to=part(upload_data, filetype='wav'), blank=True, null=True)
     seg_file = models.FileField(upload_to=part(upload_data, filetype='seg'), blank=True, null=True)
     stm_file = models.FileField(upload_to=part(upload_data, filetype='stm'), blank=True, null=True)

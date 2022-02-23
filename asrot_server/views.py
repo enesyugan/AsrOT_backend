@@ -1,8 +1,11 @@
+import pathlib
 from rest_framework.views import APIView
 from rest_framework import serializers as rf_serializers
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
+
+from django import http
 
 from pathlib import Path
 from datetime import datetime
@@ -75,32 +78,26 @@ class GetTaskApi(APIView):
  
     class OutputSerializer(rf_serializers.Serializer):
         user = CustomUser
-        task_id = rf_serializers.CharField(max_length=500)
-        file_size = rf_serializers.IntegerField()
-        task_name = rf_serializers.CharField(max_length=500)
-        audio_filename = rf_serializers.CharField(max_length=1000)
+        task_id = rf_serializers.UUIDField()
+        file_size = rf_serializers.IntegerField(source='audio_filesize')
+        task_name = rf_serializers.CharField()
+        audio_filename = rf_serializers.CharField()
         date_time = rf_serializers.DateTimeField()
-        language = rf_serializers.CharField(max_length=500)   
-        correction = rf_serializers.BooleanField()
+        language = rf_serializers.CharField()
+        correction = rf_serializers.SerializerMethodField()
+
+        def get_correction(self, task):
+            correction = selectors.correction_list(filters={'task_id': task})
+            return True if correction else False
 
     def get(self, request):
         task_id = request.query_params.get('taskId')
         task = selectors.task_list(filters={'task_id':task_id}).last()
         if not task:
             return Response({'error': "There is no task with given taskId."} \
-                                , status=status.HTTP_503_SERVICE_UNAVAILABLE)
+                                , status=status.HTTP_404_NOT_FOUND)
 
-        correction = selectors.correction_list(filters={'task_id': task})
-        out_data = {}
-        out_data['task_id'] = task.task_id
-        out_data['file_size'] = task.file_size
-        out_data['audio_filename'] = task.audio_filename
-        out_data['task_name'] = task.task_name
-        out_data['date_time'] = task.date_time
-        out_data['language'] = task.language
-        out_data['correction'] = True if correction else False
-
-        out_serializer = self.OutputSerializer(out_data)
+        out_serializer = self.OutputSerializer(instance=task)
         return Response({"tasks": out_serializer.data}, status=status.HTTP_200_OK)
 
     
@@ -214,34 +211,29 @@ class GetMediaApi(APIView):
     
     class InputSerializer(rf_serializers.Serializer):
         taskId = rf_serializers.CharField(required=True)
-         
+
+        def validate_taskId(self, value):
+            if not models.TranscriptionTask.objects.filter(task_id=value).exists():
+                raise rf_serializers.ValidationError({'taskId': 'Must point to a valid task iD'})
+            return value
+
+
     def post(self, request):
         print(request)
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        model = models.TranscriptionTask.objects.filter(task_id=serializer.validated_data['taskId']).last()
+        task = models.TranscriptionTask.objects.get(task_id=serializer.validated_data['taskId'])
 
-        if model == None:
-            return Response({'error': "There is no task with given taskId."} \
-                                , status=status.HTTP_503_SERVICE_UNAVAILABLE)
-        data_path = model.data_path
-
-        if not data_path:
+        if not task.media_file:
             return Response({'error': "There is no data_path file related to the given taskId. The task may still be in progress"} \
-                                , status=status.HTTP_503_SERVICE_UNAVAILABLE)
-        file_name = model.audio_filename
-        if not file_name:
-            return Response({'error': "No file name for given task"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+                                , status=status.HTTP_404_NOT_FOUND)
 
-        media_files = glob.glob(os.path.join(data_path, 'media', f"{file_name}.*"))
-        if not media_files:
-            return Response({'error': "No file name for given task"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        file_name = pathlib.PurePath(task.media_file.name)
 
-        ext = media_files[0].rsplit('.')[-1]
-        file = FileWrapper(open(media_files[0], 'rb'))
-        response = HttpResponse(file, content_type='video/mp4')
-        response['Content-Disposition'] = f'attachment; filename={file_name}.{ext}'
+        with task.media_file.open('rb') as file:
+            response = http.HttpResponse(file, content_type='video/mp4')
+        response['Content-Disposition'] = f'attachment; filename={file_name.stem}.{file_name.suffix}'
         return response
 
 
