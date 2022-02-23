@@ -32,3 +32,6 @@ venv/
 
 # Ignore data files
 media/
+
+#Ignore local settings
+localsettings.py
