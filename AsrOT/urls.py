@@ -20,6 +20,6 @@ from . import sec_settings
 
 urlpatterns = [
     path(sec_settings.admin_api, admin.site.urls),
-    path('auth/', include('users.urls')),
-    path('v1/', include('asrot_server.urls')),
+    path('api/auth/', include('users.urls')),
+    path('api/v1/', include('asrot_server.urls')),
 ]
