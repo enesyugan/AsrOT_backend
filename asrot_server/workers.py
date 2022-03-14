@@ -1,13 +1,11 @@
-import time
-import os
-import subprocess
 from django.conf import settings
 import base64
 import numpy as np
-import sys
 import threading
 
 from . import worker_process as worker
+
+
 
 collector_stt_ar = worker.Collector(worker.asr_ar_proc, "STT-AR", sort=True)
 collector_stt_de = worker.Collector(worker.asr_de_proc, "STT-DE", sort=True)
@@ -88,8 +86,10 @@ def asr_worker(signal: bytes, segmentation: str, language: str) -> 'tuple[str]':
         collector = collector_stt_en
     elif language == "ar":
         collector = collector_stt_ar
-    else:
+    elif language == "de":
         collector = collector_stt_de
+    else:
+        raise Exception('Unsupported language')
 
     results = ""
     for idx, line in enumerate(segmentation.splitlines()):

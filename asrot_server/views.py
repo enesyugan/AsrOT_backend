@@ -70,6 +70,7 @@ class GetTaskApi(APIView):
         date_time = rf_serializers.DateTimeField()
         language = rf_serializers.CharField()
         correction = rf_serializers.SerializerMethodField()
+        status = rf_serializers.CharField()
 
         def get_correction(self, task):
             correction = selectors.correction_list(filters={'task_id': task})
