@@ -38,6 +38,10 @@ class TranscriptionTask(models.Model):
     audio_filename = models.CharField(max_length=1000, null=False)
     audio_filesize = models.IntegerField(null=False)
 
+    assignees = models.ManyToManyField(auth.get_user_model(), 
+        through='TaskAssignment', through_fields=('task', 'assignee'), 
+        related_name='assigned_tasks')
+
     status = models.CharField(max_length=500, blank=True) #converting, segmenting,...
     date_time = models.DateTimeField(auto_now_add=True)
     language = models.CharField(max_length=500, null=False)
@@ -129,3 +133,19 @@ class CommandClip(models.Model):
     text_start = models.TimeField()
     text_end = models.TimeField()
     context_end = models.TimeField()
+
+
+
+class TaskAssignment(models.Model):
+
+    assignee = models.ForeignKey(auth.get_user_model(), on_delete=models.CASCADE, related_name='assignments_received')
+    owner = models.ForeignKey(auth.get_user_model(), on_delete=models.CASCADE, related_name='assignments_made',
+        limit_choices_to={'can_make_assignments': True})
+
+    task = models.ForeignKey(TranscriptionTask, on_delete=models.CASCADE, related_name='assignments')
+
+    created = models.DateTimeField(auto_now_add=True)
+
+    #TODO maybe add unique constraint on assignee and task
+
+

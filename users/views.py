@@ -11,6 +11,7 @@ from rest_framework.response import Response
 
 import datetime
 
+from .permissions import CanMakeAssignments
 from . import selectors
 from . import services
 # Create your views here.
@@ -55,7 +56,7 @@ class UserInfoApi(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        return Response({'email': request.user.email, 'restricted': request.user.restricted_account}, status=status.HTTP_200_OK)
+        return Response({'email': request.user.email, 'restricted': request.user.restricted_account, 'canMakeAssignments': request.user.can_make_assignments}, status=status.HTTP_200_OK)
 
 '''
 class AuthTokenValidate(APIView):
@@ -152,3 +153,21 @@ class EditUser(APIView):
 
 '''
     
+
+class UserListView(APIView):
+    permission_classes = [IsAuthenticated, CanMakeAssignments]
+
+    class FilterSerializer(serializers.Serializer):
+        query = serializers.CharField(required=False, default='')
+
+    class OutputSerializer(serializers.Serializer):
+        email = serializers.EmailField()
+
+    def get(self, request, *args, **kwargs):
+        filter_ser = self.FilterSerializer(data=request.query_params)
+        filter_ser.is_valid(raise_exception=True)
+        queryset = selectors.get_user_list(filters={
+            'email__startswith': filter_ser.validated_data['query']
+        })
+        serializer = self.OutputSerializer(queryset, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)

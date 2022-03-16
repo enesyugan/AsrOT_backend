@@ -16,6 +16,8 @@ basic_pattern = [
         path(sec_settings.getmedia_api, views.GetMediaApi.as_view(), ),
         path(sec_settings.getcorrectedvtt_api, views.GetCorrectedVttApi.as_view(), ),
         path('commandclips/', views.CreateCorrectionClipView.as_view(), ),
+        path('getalltasks/', views.GetAllTasksView.as_view(), ),
+        path('assigntask/', views.CreateAssignmentView.as_view(), ),
 ]
 
 urlpatterns = [

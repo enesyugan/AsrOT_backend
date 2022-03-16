@@ -1,7 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework import serializers as rf_serializers
 from rest_framework.response import Response
-from rest_framework import status
+from rest_framework import status, pagination
 from rest_framework.permissions import IsAuthenticated
 
 from django import http
@@ -16,6 +16,7 @@ import requests
 import glob
 
 from users.models import CustomUser
+from users.permissions import CanMakeAssignments
 from . import models
 from . import services
 from . import selectors
@@ -163,9 +164,11 @@ class GetTasksApi(APIView):
 
 
     def get(self, request):
-        tasks = selectors.task_list(filters={'user':request.user})
-        out_serializer = self.OutputSerializer(tasks, many=True)
-        return Response({"tasks": out_serializer.data}, status=status.HTTP_200_OK)
+        own_tasks = selectors.task_list(filters={'user':request.user})
+        own_tasks_ser = self.OutputSerializer(own_tasks, many=True)
+        assigned_tasks = selectors.get_assigned_tasks(request.user)
+        assigned_tasks_ser = self.OutputSerializer(assigned_tasks, many=True)
+        return Response({"tasks": own_tasks_ser.data, 'assignedTasks': assigned_tasks_ser.data}, status=status.HTTP_200_OK)
 
 
 
@@ -325,13 +328,12 @@ class CreateCorrectionClipView(APIView):
                 raise rf_serializers.ValidationError({'taskID': 'Must point to a valid task iD'})
             return value
 
-
-        
+  
     def post(self, request, *args, **kwargs):
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         clip = services.create_correction_clip(
-            user=self.request.user,
+            user=request.user,
             task_id=serializer.validated_data['taskID'],
             audio=serializer.validated_data['commandClip'],
             original_text=serializer.validated_data['originalText'],
@@ -343,4 +345,72 @@ class CreateCorrectionClipView(APIView):
             text_end=serializer.validated_data['endText'],
             context_end=serializer.validated_data['endContext'],
         )
-        return Response({}, status=status.HTTP_200_OK)
+        return Response({}, status=status.HTTP_201_CREATED)
+
+
+
+class GetAllTasksView(APIView):
+    permission_classes = [IsAuthenticated, CanMakeAssignments]
+
+    class FilterSerializer(rf_serializers.Serializer):
+        name = rf_serializers.CharField(required=False, default='')
+
+    class OutputSerializer(rf_serializers.Serializer):
+        user = rf_serializers.EmailField(source='user.email')
+        task_id = rf_serializers.CharField()
+        file_size = rf_serializers.IntegerField(source='audio_filesize')
+        task_name = rf_serializers.CharField()
+        audio_filename = rf_serializers.CharField()
+        status = rf_serializers.CharField()
+        date_time = rf_serializers.DateTimeField()
+        language = rf_serializers.CharField()
+
+    #TODO configure default paginator in settings and switch to generic view
+    class Paginator(pagination.PageNumberPagination):
+        page_size = 100
+        page_query_param = 'page'
+        page_size_query_param = 'items_per_page'
+
+    def get(self, request, *args, **kwargs):
+        filter_ser = self.FilterSerializer(data=request.query_params)
+        filter_ser.is_valid(raise_exception=True)
+
+        queryset = selectors.task_list(filters={
+            'task_name__startswith': filter_ser.validated_data['name'],
+        }).order_by('-date_time')
+
+        paginator = self.Paginator()
+        page = paginator.paginate_queryset(queryset, request, self)
+        serializer = self.OutputSerializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
+
+
+
+class CreateAssignmentView(APIView):
+    permission_classes = [IsAuthenticated, CanMakeAssignments]
+
+    class InputSerializer(rf_serializers.Serializer):
+        email = rf_serializers.EmailField()
+        taskID = rf_serializers.UUIDField()
+
+        def validate_email(self, value):
+            if not selectors.get_user_list(filters={'email':value}).exists():
+                raise rf_serializers.ValidationError({'email':"Must be a valid user's email"})
+            return value
+
+        def validate_taskID(self, value):
+            if not selectors.task_list(filters={'task_id':value}).exists():
+                raise rf_serializers.ValidationError({'taskID':"Must be a valid task's iD"})
+            return value
+
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.InputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        assignment = services.create_single_assignment(
+            owner=request.user,
+            assignee_email=serializer.validated_data['email'],
+            task_id=serializer.validated_data['taskID'],
+        )
+
+        return Response({}, status=status.HTTP_201_CREATED)

@@ -1,3 +1,4 @@
+import email
 from rest_framework import serializers as rf_serializers
 from django.core.files import base, uploadedfile
 from django.contrib import auth
@@ -113,3 +114,23 @@ def create_vtt_correction(user, vtt_data, task_id, vtt_name):
     return correction
 
 
+def create_single_assignment(owner, assignee_email, task_id):
+    if not owner.can_make_assignments:
+        raise rf_serializers.ValidationError('You are not allowed to make assignments')
+
+    task = models.TranscriptionTask.objects.get(task_id=task_id)
+    assignee = selectors.get_user(email=assignee_email)
+
+    assignment = models.TaskAssignment(
+        assignee=assignee,
+        owner=owner,
+        task=task,
+    )
+
+    try:
+        assignment.full_clean()
+    except Exception as e:
+        raise rf_serializers.ValidationError(e)
+    assignment.save()
+
+    return assignment

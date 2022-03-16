@@ -1,11 +1,28 @@
 from . import models
-from users.models import CustomUser
 
-def get_user_list(*, filters=None):
-    filters = filters or {}
+#This is meant to be passed on to modules importing asrot_server.selectors DO NOT REMOVE
+from users.selectors import get_user_list, get_user
 
-    qs = CustomUser.objects.all()
-    return qs.filter(**filters)
+def get_assigned_tasks(user, owner=None):
+    if owner is None:
+        return user.assigned_tasks.all().distinct()
+    else:
+        return user.assigned_tasks.filter(assignments__owner=owner).distinct()
+
+def get_assigned_users(task, owner=None):
+    if owner is None:
+        return task.assignees.all().distinct()
+    else:
+        return task.assignees.filter(assignments_received__owner=owner).distinct()
+
+def get_managed_assignments(owner, task=None, assignee=None):
+    filters = {}
+    if task is not None:
+        filters['task'] = task
+    if assignee is not None:
+        filters['assignee'] = assignee
+    return owner.assignments_made.filter(**filters)
+
 
 def correction_list(*, filters=None):
     filters = filters or {}
