@@ -88,14 +88,20 @@ def create_vtt_correction(user, vtt_data, task_id, vtt_name):
                     print("TASK ID: {}".format(task_id))
                     break
     
-    if task_id is None:
-        task = None
-    else:
+    try:
         task = models.TranscriptionTask.objects.get(task_id=task_id)
+    except models.TranscriptionTask.DoesNotExist as e:
+        task = None
 
     if user.id is None:
-        #TODO this should be detached by accessing USERNAME_FIELD
-        user, _ = auth.get_user_model().objects.get_or_create(email='unknown@unknown.com')
+        unk_email = 'unknown@unknown.com'
+        user_model = auth.get_user_model()
+        try:
+            user = user_model._default_manager.get(email=unk_email)
+        except user_model.DoesNotExist as e:
+            user = user_model._default_manager.create_user(unk_email, password='')
+            user.set_unusable_password()
+            user.save()
 
     vtt_file = base.ContentFile(vtt_data, vtt_name)
 

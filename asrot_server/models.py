@@ -13,6 +13,8 @@ from AsrOT import sec_settings
 def base_path(instance):
     return pathlib.PurePath(sec_settings.base_data_path)/instance.language.upper()
 
+
+
 def upload_media(instance, fn):
     filename = pathlib.PurePath(fn)
     return base_path(instance)/'media'/f'{instance.audio_filename}{filename.suffix}'
@@ -29,7 +31,6 @@ def upload_data(instance, fn, filetype):
 
 def upload_logs(instance, fn, filetype):
     return base_path(instance)/'log'/instance.audio_filename/f'{filetype}.log'
-
 
 class TranscriptionTask(models.Model):
     task_id = models.UUIDField(default=uuid.uuid4, primary_key=True, editable=False) ## mit uuid ein id generieren dann kann man darüber bspw status abfrage machen
