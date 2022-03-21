@@ -11,26 +11,19 @@ from AsrOT import sec_settings
 
 
 def base_path(instance):
-    return pathlib.PurePath(sec_settings.base_data_path)/instance.language.upper()
+    return pathlib.PurePath(sec_settings.base_data_path)/instance.language.upper()/instance.audio_filename
 
 
 
 def upload_media(instance, fn):
     filename = pathlib.PurePath(fn)
-    return base_path(instance)/'media'/f'{instance.audio_filename}{filename.suffix}'
+    return base_path(instance)/f'{instance.audio_filename}{filename.suffix}'
 
 def upload_data(instance, fn, filetype):
-    sub_dir = {
-        'wav': 'wav',
-        'seg': 'seg',
-        'stm': 'seg',
-        'txt': 'txt',
-        'vtt': 'hypo-vtt',
-    }
-    return base_path(instance)/sub_dir[filetype]/f'{instance.audio_filename}.{filetype}'
+    return base_path(instance)/f'{instance.audio_filename}.{filetype}'
 
 def upload_logs(instance, fn, filetype):
-    return base_path(instance)/'log'/instance.audio_filename/f'{filetype}.log'
+    return base_path(instance)/'log'/f'{filetype}.log'
 
 class TranscriptionTask(models.Model):
     task_id = models.UUIDField(default=uuid.uuid4, primary_key=True, editable=False) ## mit uuid ein id generieren dann kann man darüber bspw status abfrage machen
@@ -59,6 +52,9 @@ class TranscriptionTask(models.Model):
     seg_log = models.FileField(upload_to=part(upload_logs, filetype='segmentation'), blank=True, null=True)
     asr_log = models.FileField(upload_to=part(upload_logs, filetype='asr'), blank=True, null=True)
     vtt_log = models.FileField(upload_to=part(upload_logs, filetype='vtt'), blank=True, null=True)
+
+    class Meta:
+        ordering = ['-date_time']
 
     def __str__(self):
         return str(self.audio_filename) + ' language: ' + str(self.language)
@@ -101,6 +97,9 @@ class TranscriptionCorrection(models.Model):
     correction_file = models.FileField(upload_to=upload_correction)
     first_commit = models.DateTimeField(auto_now_add=True)
     last_commit = models.DateTimeField(verbose_name='last upload', auto_now=True)
+
+    class Meta:
+        ordering = ['task', 'user', '-last_commit']
     
     def __str__(self):
         return str(self.user) + 'correction done task_id: ' + str(self.task_id)
@@ -135,6 +134,9 @@ class CommandClip(models.Model):
     text_end = models.TimeField()
     context_end = models.TimeField()
 
+    class Meta:
+        ordering = ['task', 'user', '-created']
+
 
 
 class TaskAssignment(models.Model):
@@ -146,6 +148,9 @@ class TaskAssignment(models.Model):
     task = models.ForeignKey(TranscriptionTask, on_delete=models.CASCADE, related_name='assignments')
 
     created = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created']
 
     #TODO maybe add unique constraint on assignee and task
 
