@@ -44,7 +44,8 @@ def create_task(task_name, user, audiofile, language):
         audiofile.seek(0)
         audio = audiofile.read()
 
-    thread = threading.Thread(target=utils.pipe, args=(new_task, audio, ext, ))
+    #daemon=False makes sure that the program doesn't finish if a pipe is still running
+    thread = threading.Thread(target=utils.pipe, args=(new_task, audio, ext, ), daemon=False)
     thread.start()
 
     return new_task
