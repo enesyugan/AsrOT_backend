@@ -31,6 +31,55 @@ base_data_path_unk = sec_settings.base_data_path_unk
 base_data_path = sec_settings.base_data_path
 server_base_path = sec_settings.server_base_path
 
+class PostSelfAssignTaskApi(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    class InputSerializer(rf_serializers.Serializer):
+        taskId = rf_serializers.CharField(required=True)
+
+        def validate_taskId(self, value):
+            if not models.TranscriptionTask.objects.filter(task_id=value).exists():
+                raise rf_serializers.ValidationError({'taskId': 'Must point to a valid task iD'})
+            return value
+
+    def post(self, request):
+        serializer = self.InputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        task_id = serializer.validated_data['taskId']
+      
+        res = services.selfassign_task(taskId)
+        if not res:       
+            raise rf_serializers.ValidationError({'error': 'Couldnt assign task'})
+        return Response({}, status=status.HTTP_200_OK)
+
+class GetMediaUrlApi(APIView):
+    
+    class InputSerializer(rf_serializers.Serializer):
+        taskId = rf_serializers.CharField(required=True)
+
+        def validate_taskId(self, value):
+            if not models.TranscriptionTask.objects.filter(task_id=value).exists():
+                raise rf_serializers.ValidationError({'taskId': 'Must point to a valid task iD'})
+            return value
+
+    class OutputSerializer(rf_serializers.Serializer):
+        mediaUrl = rf_serializers.CharField()
+
+    def post(self, request):
+        serializer = self.InputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        task_id = serializer.validated_data['taskId']
+
+        task = selectors.path_get(filters={'task_id':task_id})
+        if not task:
+            return Response({'error': "There is no task with given taskId."} \
+                                , status=status.HTTP_404_NOT_FOUND) 
+        mediaPath = str(task.media_file)
+        
+        mediaUrl = "https://transcriptions.dataforlearningmachines.com/media/" + str(mediaPath.split("media/")[-1])
+
+        out_serializer = self.OutputSerializer(instance=mediaUrl)
+        return Response(out_serializer.data, status=status.HTTP_200_OK)
 
 class GetCorrectedVttApi(APIView):
     #permission_classes = [IsAuthenticated]

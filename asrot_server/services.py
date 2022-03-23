@@ -9,6 +9,29 @@ from datetime import datetime
 import pathlib, threading
 
 
+def selfassign_task(task_id):
+    task = selectors.path_get(filters={'task_id':task_id})
+    task.assigned = True
+    try:
+        task.full_clean()
+        task.save()
+    except Exception as e:
+        print(e)
+        raise rf_serializers.ValidationError(e)
+
+    task.save()
+
+    user.assigned_task=task_id
+    try:
+        user.full_clean()
+        user.save()
+    except Exception as e:
+        print(e)
+        raise rf_serializers.ValidationError(e)
+
+    user.save()
+    return True
+
 def create_task(task_name, user, audiofile, language):
     ext = pathlib.PurePath(audiofile.name).suffix
     file_name = pathlib.PurePath(audiofile.name).stem

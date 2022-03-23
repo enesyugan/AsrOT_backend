@@ -18,6 +18,7 @@ basic_pattern = [
         path('commandclips/', views.CreateCorrectionClipView.as_view(), ),
         path('getalltasks/', views.GetAllTasksView.as_view(), ),
         path('assigntask/', views.CreateAssignmentView.as_view(), ),
+        path('getmediaurl/', views.GetMediaUrlApi.as_view(), ),
 ]
 
 urlpatterns = [
