@@ -179,7 +179,7 @@ def pipe(task: models.TranscriptionTask, audio, file_ext):
 
         #ASR
         try:
-            text, log, *additional = workers.asr_worker(audio_bytes, segmentation, task.language)
+            text, log, *additional = workers.asr_worker(audio_bytes, segmentation, task.language.asr_id)
             text = text.strip()
         except Exception as e:
             print("Pipe failed: {}".format(e))

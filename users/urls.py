@@ -10,4 +10,5 @@ urlpatterns = [
     path(sec_settings.userinfo_api, views.UserInfoApi.as_view() ),
     path(sec_settings.register_api, views.RegisterUserApi.as_view() ),
     path('listusers/', views.UserListView.as_view(), ),
+    path('listlangs/', views.LanguageListView.as_view(), ),
 ]

@@ -8,10 +8,12 @@ import uuid, pathlib
 
 from AsrOT import sec_settings
 
+from users.models import Language
+
 
 
 def base_path(instance):
-    return pathlib.PurePath(sec_settings.base_data_path)/instance.language.upper()/instance.audio_filename
+    return pathlib.PurePath(sec_settings.base_data_path)/instance.language.short.upper()/instance.audio_filename
 
 
 
@@ -38,7 +40,7 @@ class TranscriptionTask(models.Model):
 
     status = models.CharField(max_length=500, blank=True) #converting, segmenting,...
     date_time = models.DateTimeField(auto_now_add=True)
-    language = models.CharField(max_length=500, null=False)
+    language = models.ForeignKey(Language, on_delete=models.PROTECT)
 
     #`blank=True` `null=True` since the files are created and saved later in the pipeline
     media_file = models.FileField(upload_to=upload_media)
@@ -58,9 +60,6 @@ class TranscriptionTask(models.Model):
 
     def __str__(self):
         return str(self.audio_filename) + ' language: ' + str(self.language)
-
-    def clean(self):
-        self.language = self.language.lower()
 
     @property
     def text(self):

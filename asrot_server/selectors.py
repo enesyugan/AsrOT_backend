@@ -1,7 +1,9 @@
 from . import models
 
-#This is meant to be passed on to modules importing asrot_server.selectors DO NOT REMOVE
-from users.selectors import get_user_list, get_user
+
+# DO NOT REMOVE This is meant to be passed on to modules importing asrot_server.selectors DO NOT REMOVE
+from users.selectors import get_user_list, get_user, get_language_list, get_language
+
 
 def get_assigned_tasks(user, owner=None):
     if owner is None:

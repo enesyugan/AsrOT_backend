@@ -69,7 +69,7 @@ class GetTaskApi(APIView):
         task_name = rf_serializers.CharField()
         audio_filename = rf_serializers.CharField()
         date_time = rf_serializers.DateTimeField()
-        language = rf_serializers.CharField()
+        language = rf_serializers.PrimaryKeyRelatedField(read_only=True)
         correction = rf_serializers.SerializerMethodField()
         status = rf_serializers.CharField()
 
@@ -160,7 +160,7 @@ class GetTasksApi(APIView):
         audio_filename = rf_serializers.CharField()
         status = rf_serializers.CharField()
         date_time = rf_serializers.DateTimeField()
-        language = rf_serializers.CharField()
+        language = rf_serializers.PrimaryKeyRelatedField(read_only=True)
 
 
     def get(self, request):
@@ -278,14 +278,8 @@ class CreateTaskApi(APIView):
     class InputSerializer(rf_serializers.Serializer):
         taskName = rf_serializers.CharField(required=True)
         audioFile = rf_serializers.FileField(required=True)
-        sourceLanguage = rf_serializers.CharField(max_length=500, required=True)
+        sourceLanguage = rf_serializers.PrimaryKeyRelatedField( queryset=selectors.get_language_list(asr=True) )
         #translationLanguage = rf_serializers.CharField(max_length=500, required=False)
-
-        def validate_sourceLanguage(self, value):
-            if not value in settings.languages_supported:
-                raise rf_serializers.ValidationError({"sourceLanguage": "You need to define one of the valid languages {}"\
-						.format(settings.languages_supported)})
-            return value
 
 
     def post(self, request):
@@ -354,6 +348,12 @@ class GetAllTasksView(APIView):
 
     class FilterSerializer(rf_serializers.Serializer):
         name = rf_serializers.CharField(required=False, default='')
+        langs = rf_serializers.CharField(required=False, default=None)
+
+        def validate_langs(self, value):
+            langs = value.split(',')
+            return selectors.get_language_list(filters={'short__in':langs})
+
 
     class OutputSerializer(rf_serializers.Serializer):
         user = rf_serializers.EmailField(source='user.email')
@@ -375,9 +375,12 @@ class GetAllTasksView(APIView):
         filter_ser = self.FilterSerializer(data=request.query_params)
         filter_ser.is_valid(raise_exception=True)
 
-        queryset = selectors.task_list(filters={
+        filters={
             'task_name__startswith': filter_ser.validated_data['name'],
-        }).order_by('-date_time')
+        }
+        if filter_ser.validated_data['langs']:
+            filters['language__in'] = filter_ser.validated_data['langs']
+        queryset = selectors.task_list(filters=filters).distinct()
 
         paginator = self.Paginator()
         page = paginator.paginate_queryset(queryset, request, self)

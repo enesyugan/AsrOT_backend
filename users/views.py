@@ -1,6 +1,5 @@
 from django.shortcuts import render
 from django.contrib.auth import authenticate
-from django.contrib.auth.hashers import make_password
 
 from rest_framework.views import APIView
 from rest_framework import serializers
@@ -15,6 +14,8 @@ from .permissions import CanMakeAssignments
 from . import selectors
 from . import services
 # Create your views here.
+
+
 
 class LogInApi(APIView):
 
@@ -45,6 +46,8 @@ class LogInApi(APIView):
 
         return Response({"token": token.key}, status=status.HTTP_200_OK)
 
+
+
 class LogOutApi(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -52,11 +55,23 @@ class LogOutApi(APIView):
         request.user.auth_token.delete()
         return Response(status=status.HTTP_200_OK)
 
+
+
 class UserInfoApi(APIView):
     permission_classes = [IsAuthenticated]
 
+
+    class OutputSerializer(serializers.Serializer):
+        email = serializers.EmailField()
+        restricted = serializers.BooleanField(source='restricted_account')
+        canMakeAssignments = serializers.BooleanField(source='can_make_assignments')
+        langs = serializers.PrimaryKeyRelatedField(read_only=True, many=True, source='languages')
+
+
     def post(self, request):
-        return Response({'email': request.user.email, 'restricted': request.user.restricted_account, 'canMakeAssignments': request.user.can_make_assignments}, status=status.HTTP_200_OK)
+        out_ser = self.OutputSerializer(instance=request.user)
+        return Response(out_ser.data, status=status.HTTP_200_OK)
+
 
 '''
 class AuthTokenValidate(APIView):
@@ -91,23 +106,35 @@ class ListUsers(APIView):
 
         return Response({"users": out_serializer.data}, status=status.HTTP_200_OK)
 '''
+
+
 class RegisterUserApi(APIView):
     #permission_classes = [IsAuthenticated]
 
     class InputSerializer(serializers.Serializer):
         email = serializers.EmailField(required=True)
         password = serializers.CharField(
-                write_only=True,
-                required=True,
-                style={'input_type': 'password', 'placeholder': 'Password'}
-                )
+            write_only=True,
+            required=True,
+            style={'input_type': 'password', 'placeholder': 'Password'}
+        )
+        langs = serializers.PrimaryKeyRelatedField(
+            queryset=selectors.get_language_list(),
+            many=True,
+        )
+
 
     def post(self, request):
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        serializer.validated_data['password'] = make_password(serializer.validated_data.get('password'))
-        services.user_register(serializer=serializer)
+        services.user_register(
+            email=serializer.validated_data['email'],
+            password=serializer.validated_data['password'],
+            langs=serializer.validated_data['langs'],
+        )
         return Response({"user": serializer.data}, status=status.HTTP_201_CREATED)
+
+
 '''
 class DeleteUser(APIView):
     permission_classes = [IsAuthenticated]
@@ -159,15 +186,48 @@ class UserListView(APIView):
 
     class FilterSerializer(serializers.Serializer):
         query = serializers.CharField(required=False, default='')
+        langs = serializers.CharField(required=False, default=None)
+
+        def validate_langs(self, value):
+            langs = value.split(',')
+            return selectors.get_language_list(filters={'short__in':langs})
+
 
     class OutputSerializer(serializers.Serializer):
         email = serializers.EmailField()
 
+
     def get(self, request, *args, **kwargs):
         filter_ser = self.FilterSerializer(data=request.query_params)
         filter_ser.is_valid(raise_exception=True)
-        queryset = selectors.get_user_list(filters={
+        filters={
             'email__startswith': filter_ser.validated_data['query']
-        })
+        }
+        if filter_ser.validated_data['langs']:
+            filters['languages__in'] = filter_ser.validated_data['langs']
+        queryset = selectors.get_user_list(filters=filters).distinct()
+        serializer = self.OutputSerializer(queryset, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+
+class LanguageListView(APIView):
+
+    class FilterSerializer(serializers.Serializer):
+        onlyASR = serializers.BooleanField(required=False, default=False)
+    
+    class OutputSerializer(serializers.Serializer):
+        short = serializers.SlugField()
+        english_name = serializers.CharField()
+        native_name = serializers.CharField()
+
+
+    def get(self, request, *args, **kwargs):
+        filter_ser = self.FilterSerializer(data=request.query_params)
+        filter_ser.is_valid(raise_exception=True)
+        if filter_ser.validated_data['onlyASR']:
+            queryset = selectors.get_language_list(asr=True)
+        else:
+            queryset = selectors.get_language_list()
         serializer = self.OutputSerializer(queryset, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
