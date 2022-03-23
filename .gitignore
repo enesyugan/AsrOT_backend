@@ -1,6 +1,7 @@
 
 # Ignore a python virtual environment
 venv/
+vEnv/
 
 # Ignore confidential settings
 sec_settings.py
