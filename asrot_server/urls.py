@@ -23,4 +23,4 @@ basic_pattern = [
 urlpatterns = [
     #path('ping/', views.PingApi.as_view()),
     path('', include((basic_pattern, ''))),
-]
+] 

@@ -40,6 +40,9 @@ class TranscriptionTask(models.Model):
     date_time = models.DateTimeField(auto_now_add=True)
     language = models.CharField(max_length=500, null=False)
 
+    assigned = models.BooleanField(default=False)
+    corrected = models.BooleanField(default=False)
+
     #`blank=True` `null=True` since the files are created and saved later in the pipeline
     media_file = models.FileField(upload_to=upload_media)
     wav_file = models.FileField(upload_to=part(upload_data, filetype='wav'), blank=True, null=True)

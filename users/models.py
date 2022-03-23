@@ -14,6 +14,8 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     last_login = models.DateTimeField(verbose_name='last login', auto_now=True)
     restricted_account = models.BooleanField(default=True)
 
+    assigned_task = models.CharField(max_length=500, blank=True, default="none")
+
     can_make_assignments = models.BooleanField(default=False)
 
     USERNAME_FIELD = 'email'

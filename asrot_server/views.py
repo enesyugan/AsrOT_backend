@@ -4,7 +4,10 @@ from rest_framework.response import Response
 from rest_framework import status, pagination
 from rest_framework.permissions import IsAuthenticated
 
+from wsgiref.util import FileWrapper
+
 from django import http
+from django.http import StreamingHttpResponse
 
 import pathlib
 from datetime import datetime
@@ -14,6 +17,8 @@ import uuid
 import sys
 import requests
 import glob
+import re
+import mimetypes
 
 from users.models import CustomUser
 from users.permissions import CanMakeAssignments
@@ -25,6 +30,7 @@ from AsrOT import settings, sec_settings
 base_data_path_unk = sec_settings.base_data_path_unk
 base_data_path = sec_settings.base_data_path
 server_base_path = sec_settings.server_base_path
+
 
 class GetCorrectedVttApi(APIView):
     #permission_classes = [IsAuthenticated]
@@ -72,6 +78,8 @@ class GetTaskApi(APIView):
         language = rf_serializers.CharField()
         correction = rf_serializers.SerializerMethodField()
         status = rf_serializers.CharField()
+        assigned = rf_serializers.BooleanField()
+        corrected = rf_serializers.BooleanField()
 
         def get_correction(self, task):
             correction = selectors.correction_list(filters={'task_id': task})
@@ -187,20 +195,36 @@ class GetMediaApi(APIView):
 
     def post(self, request):
         print(request)
+        print("-1")
         serializer = self.InputSerializer(data=request.data)
+        print("00")
         serializer.is_valid(raise_exception=True)
-
+        print("111")
         task = models.TranscriptionTask.objects.get(task_id=serializer.validated_data['taskId'])
-
+        print("222")
         if not task.media_file:
             return Response({'error': "There is no data_path file related to the given taskId. The task may still be in progress"} \
                                 , status=status.HTTP_404_NOT_FOUND)
 
         file_name = pathlib.PurePath(task.media_file.name)
-
+        
         with task.media_file.open('rb') as file:
             response = http.HttpResponse(file, content_type='video/mp4')
+        #print(type(task.media_file))
+        #print(str(task.media_file))
+        #print(task.media_file.url)
+        #chunk_size = request.META.get('HTTP_RANGE', '').strip()
+        #print(chunk_size)
+
+        #print(mimetypes.guess_type(str(task.media_file)))
+        #print(os.path.getsize(str(task.media_file)))
+        #print(type(chunk_size))
+        #try:
+        #    response = StreamingHttpResponse(FileWrapper(open(str(task.media_file), "rb"), int(chunk_size)),content_type=mimetypes.guess_type(str(task.media_file))[0])
+        #    response['Content-Length'] = os.path.getsize(str(task.media_file))
         response['Content-Disposition'] = f'attachment; filename={file_name.stem}.{file_name.suffix}'
+        #except Exception as e:
+        #    print(e)
         return response
 
 

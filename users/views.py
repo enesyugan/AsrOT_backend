@@ -56,7 +56,7 @@ class UserInfoApi(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        return Response({'email': request.user.email, 'restricted': request.user.restricted_account, 'canMakeAssignments': request.user.can_make_assignments}, status=status.HTTP_200_OK)
+        return Response({'email': request.user.email, 'assignedTask': request.user.assigned_task, 'restricted': request.user.restricted_account, 'canMakeAssignments': request.user.can_make_assignments}, status=status.HTTP_200_OK)
 
 '''
 class AuthTokenValidate(APIView):
