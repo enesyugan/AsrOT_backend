@@ -17,7 +17,7 @@ def base_path(instance):
 
 def upload_media(instance, fn):
     filename = pathlib.PurePath(fn)
-    return base_path(instance)/f'{instance.audio_filename}{filename.suffix}'
+    return base_path(instance)/f'{instance.audio_filename}__upload{filename.suffix}'
 
 def upload_data(instance, fn, filetype):
     return base_path(instance)/f'{instance.audio_filename}.{filetype}'
@@ -81,11 +81,12 @@ def upload_correction(instance, fn):
         # Changing the name can't be done in a Storage class, since it should only be used for task-related files
         i = 0
         base_name = base_path(instance.task)/"correct-vtt"
-        file_name = base_name/f'{instance.task.audio_filename}__{i:03d}.vtt'
-        while default_storage.exists(file_name):
+        while True:
+            file_name = base_name/f'{instance.task.audio_filename}__{instance.user.pk:04d}__correct__{i:03d}.vtt'
+            if not default_storage.exists(file_name):
+                break
             i += 1
-            file_name = base_name/f'{instance.task.audio_filename}__{i:03d}.vtt'
-        return str(file_name)     
+        return file_name   
     else:
         now = datetime.datetime.now()
         return pathlib.PurePath(sec_settings.base_data_path_unk)/str(instance.user)/'origin_unknown'/ \
@@ -94,7 +95,7 @@ def upload_correction(instance, fn):
 class TranscriptionCorrection(models.Model):
     user = models.ForeignKey(auth.get_user_model(), on_delete=models.CASCADE, related_name='corrections')
     task = models.ForeignKey(TranscriptionTask, on_delete=models.CASCADE, related_name='corrections', blank=True, null=True)
-    correction_file = models.FileField(upload_to=upload_correction)
+    correction_file = models.FileField(upload_to=upload_correction, max_length=200)
     first_commit = models.DateTimeField(auto_now_add=True)
     last_commit = models.DateTimeField(verbose_name='last upload', auto_now=True)
 
