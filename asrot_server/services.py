@@ -44,7 +44,7 @@ def create_task(task_name, user, audiofile, language):
     print(user)
     print(user.restricted_account)
     if user.restricted_account:
-        if file_sizemb > 10:
+        if file_sizemb > 800:
             raise rf_serializers.ValidationError({"file size": "You have a restricted account. Your media file must be smaller than 10 mb. Please write an email to administrators to allow for unlimited upload size."})
 
     new_task = models.TranscriptionTask(

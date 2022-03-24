@@ -77,8 +77,10 @@ class GetMediaUrlApi(APIView):
         mediaPath = str(task.media_file)
         
         mediaUrl = "https://transcriptions.dataforlearningmachines.com/media/" + str(mediaPath.split("media/")[-1])
+        body = {}
+        body['mediaUrl'] = mediaUrl
 
-        out_serializer = self.OutputSerializer(instance=mediaUrl)
+        out_serializer = self.OutputSerializer(instance=body)
         return Response(out_serializer.data, status=status.HTTP_200_OK)
 
 class GetCorrectedVttApi(APIView):

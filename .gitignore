@@ -24,6 +24,7 @@ worker_scripts/
 # Ignore our collectors
 worker_process_flask.py
 worker_process.py
+worker_process_real.py
 
 # Ignore database migrations
 migrations/
