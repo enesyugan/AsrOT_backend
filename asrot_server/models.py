@@ -6,12 +6,12 @@ from django.core.files.storage import default_storage
 from functools import partial as part
 import uuid, pathlib
 
-from AsrOT import sec_settings
+from AsrOT import settings
 
 
 
 def base_path(instance):
-    return pathlib.PurePath(sec_settings.base_data_path)/instance.language.upper()/instance.audio_filename
+    return pathlib.PurePath(settings.MEDIA_ROOT)/instance.language.upper()/instance.audio_filename
 
 
 
@@ -91,7 +91,7 @@ def upload_correction(instance, fn):
         return str(file_name)     
     else:
         now = datetime.datetime.now()
-        return pathlib.PurePath(sec_settings.base_data_path_unk)/str(instance.user)/'origin_unknown'/ \
+        return pathlib.PurePath(settings.MEDIA_ROOT)/str(instance.user)/'origin_unknown'/ \
             f'{filename}_correction-{now.strftime("%Y_%m_%d_%H_%M_%S")}.vtt'
 
 class TranscriptionCorrection(models.Model):
