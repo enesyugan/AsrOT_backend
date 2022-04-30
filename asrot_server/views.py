@@ -25,11 +25,37 @@ from users.permissions import CanMakeAssignments
 from . import models
 from . import services
 from . import selectors
+import csv
 from AsrOT import settings, sec_settings
 
 base_data_path_unk = sec_settings.base_data_path_unk
 base_data_path = sec_settings.base_data_path
 server_base_path = sec_settings.server_base_path
+
+class GetCSVLinksApi(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        print("GetCSVLinksApi")
+        response = http.HttpResponse(
+        content_type='text/csv',
+        )
+        response['Content-Disposition'] = 'attachment; filename="ShareYourMedia.csv"'
+
+        try:
+            own_tasks = selectors.task_list(filters={'user':request.user})
+            writer = csv.writer(response)#, delimiter="\t")
+        except Exception as e:
+            print(e)
+
+        writer.writerow(['Name', 'Date', 'Share Link'])
+        if len(own_tasks) < 1:
+            writer.writerow(["You have not generated any transcription yet"])
+        for task in own_tasks:
+            writer.writerow([str(task.task_name), task.date_time, f"https://transcriptions.dataforlearningmachines.com/shared?task_id={task.task_id}"])
+
+        return response
+
 
 class PostSelfAssignTaskApi(APIView):
     permission_classes = [IsAuthenticated]
@@ -76,7 +102,8 @@ class GetMediaUrlApi(APIView):
                                 , status=status.HTTP_404_NOT_FOUND) 
         mediaPath = str(task.media_file)
         
-        mediaUrl = "https://transcriptions.dataforlearningmachines.com/media/" + str(mediaPath.split("media/")[-1])
+        #mediaUrl = "https://i13hpc29.ira.uka.de/media/" + str(mediaPath.split("media/")[-1])
+        mediaUrl = sec_settings.media_url + str(mediaPath.split("media/")[-1])
         body = {}
         body['mediaUrl'] = mediaUrl
 
@@ -88,6 +115,7 @@ class GetCorrectedVttApi(APIView):
 
     class InputSerializer(rf_serializers.Serializer):
         taskId = rf_serializers.CharField(required=True)
+        original = rf_serializers.BooleanField(default=False)
 
         def validate_taskId(self, value):
             if not models.TranscriptionTask.objects.filter(task_id=value).exists():
@@ -105,11 +133,24 @@ class GetCorrectedVttApi(APIView):
         ## TODO should be in selectors.py
         task = models.TranscriptionTask.objects.get(task_id=serializer.validated_data['taskId'])
         
-        if not task.corrections.all().exists():
-            return Response({'error': "No corrected file for given task"}, status=status.HTTP_404_NOT_FOUND)
+        if not task.corrections.all().filter(**{'user':request.user}).exists() or serializer.validated_data['original']:
+            print("HER")
+            if not task.vtt_file:
+                return Response({'error': "There is no vtt file related to the given taskId. The task may still be in progress"},
+                        status=status.HTTP_404_NOT_FOUND)
+
+            out_serializer = self.OutputSerializer(instance=task)
+            return Response(out_serializer.data, status=status.HTTP_200_OK)
+
+            #return Response({'error': "No corrected file for given task"}, status=status.HTTP_404_NOT_FOUND)
+
+
 
         ## TODO should be in selectors.py 
-        correction = task.corrections.all().order_by('-last_commit').first()
+        #correction = task.corrections.all().order_by('-last_commit').first()
+        correction = task.corrections.all()
+        correction =  correction.filter(**{'user':request.user})
+        correction = correction.order_by('-last_commit').first()
 
         out_serializer = self.OutputSerializer(instance=correction)
         return Response(out_serializer.data, status=status.HTTP_200_OK)
@@ -170,7 +211,7 @@ class SetVttCorrectionApi(APIView):
 
         correction = services.create_vtt_correction(
             user=request.user,
-            vtt_data=serializer.validated_data['vtt'],
+            vtt_data=serializer.validated_data['vtt']+'\n',
             task_id=serializer.validated_data['task_id'],
             vtt_name=serializer.validated_data['vtt_name'],
         )

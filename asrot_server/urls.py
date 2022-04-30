@@ -19,6 +19,7 @@ basic_pattern = [
         path('getalltasks/', views.GetAllTasksView.as_view(), ),
         path('assigntask/', views.CreateAssignmentView.as_view(), ),
         path('getmediaurl/', views.GetMediaUrlApi.as_view(), ),
+        path('getcsvlink/', views.GetCSVLinksApi.as_view(), ),
 ]
 
 urlpatterns = [

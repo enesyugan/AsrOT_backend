@@ -3,6 +3,12 @@ from . import models
 #This is meant to be passed on to modules importing asrot_server.selectors DO NOT REMOVE
 from users.selectors import get_user_list, get_user
 
+def task_list(*, filters=None):
+    filters = filters or {}
+
+    qs = models.TranscriptionTask.objects.all()
+    return qs.filter(**filters)
+
 def get_assigned_tasks(user, owner=None):
     if owner is None:
         return user.assigned_tasks.all().distinct()
