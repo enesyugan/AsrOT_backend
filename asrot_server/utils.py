@@ -75,7 +75,7 @@ def format_seg_as_stm(segmentation):
         name0, name1, start_str, end_str = line.split()
         start = float(start_str)
         end = float(end_str)
-        dic[start] = f'{name0}-{int(start*100):07}_{int(end*100):07} {name1} {start:.2f} {end:.2f}\n'
+        dic[start] = f'{name0} {name1} {start:.2f} {end:.2f}\n'
 
     result = [ line for _, line in sorted(dic.items()) ]
 

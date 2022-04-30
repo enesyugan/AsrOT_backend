@@ -7,12 +7,9 @@ from . import worker_process as worker
 
 
 
-#collector_stt_ar = worker.Collector(worker.asr_ar_proc, "STT-AR", sort=True)
-#collector_stt_de = worker.Collector(worker.asr_de_proc, "STT-DE", sort=True)
-#collector_stt_en = worker.Collector(worker.asr_en_proc, "STT-EN", sort=True)
-collector_stt_ar = worker.Collector(worker.asr_ar_url, "STT-AR", sort=True)
-collector_stt_de = worker.Collector(worker.asr_de_url, "STT-DE", sort=True)
-collector_stt_en = worker.Collector(worker.asr_en_url, "STT-EN", sort=True)
+collector_stt_ar = worker.Collector(worker.asr_ar_proc, "STT-AR", sort=True)
+collector_stt_de = worker.Collector(worker.asr_de_proc, "STT-DE", sort=True)
+collector_stt_en = worker.Collector(worker.asr_en_proc, "STT-EN", sort=True)
 
 
 """

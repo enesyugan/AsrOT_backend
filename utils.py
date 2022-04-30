@@ -114,8 +114,7 @@ class Segmenter():
                     self.segment = AudioSegment(self.ring_buffer[0][0].timestamp)
                     for f, s in self.ring_buffer:
                         self.segment.append(f.bytes)
-                    self.segs.append(self.segment)
-                    print('New segment added.')
+                    self.segs.append(self.segment)      
                     self.ring_buffer.clear()
             else:
                 self.segment.append(frame.bytes)
