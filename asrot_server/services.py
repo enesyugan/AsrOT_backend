@@ -4,10 +4,12 @@ from django.core.files import base, uploadedfile
 from django.contrib import auth
 
 from . import models, utils, selectors
+from AsrOT import settings
 
 from datetime import datetime
 import pathlib, threading
 
+print(settings.MEDIA_ROOT)
 
 def selfassign_task(task_id):
     task = selectors.path_get(filters={'task_id':task_id})
@@ -35,7 +37,7 @@ def selfassign_task(task_id):
 def create_task(task_name, user, audiofile, language):
     ext = pathlib.PurePath(audiofile.name).suffix
     file_name = pathlib.PurePath(audiofile.name).stem
-    file_name = file_name.replace('/','_').replace('\\','_')
+    file_name = file_name.replace('/','_').replace('\\','_').replace(' ','-')
     now = datetime.now()
     date_string = now.strftime("%Y_%m_%d_%H_%M_%S")
     file_name = f"{file_name}-{date_string}"
@@ -108,7 +110,6 @@ def create_correction_clip(task_id, user, audio,
 
 
 def create_vtt_correction(user, vtt_data, task_id, vtt_name):
-
     if task_id is None:
         for line in vtt_data.split('\n'):
                 if "NOTE task_id:" in line: 
@@ -141,9 +142,11 @@ def create_vtt_correction(user, vtt_data, task_id, vtt_name):
 
     try:
         correction.full_clean()
+        correction.save()
     except Exception as e:
-        raise rf_serializers.ValidationError(e)
-    correction.save()
+        print(f"Error: {e}")
+        #raise rf_serializers.ValidationError(e) das fürt im Frontend zu error
+    
 
     return correction
 

@@ -9,6 +9,7 @@ import uuid, pathlib
 from AsrOT import settings
 
 
+print(settings.BASE_DIR)
 
 def base_path(instance):
     return pathlib.PurePath(settings.MEDIA_ROOT)/instance.language.upper()/instance.audio_filename
@@ -17,7 +18,7 @@ def base_path(instance):
 
 def upload_media(instance, fn):
     filename = pathlib.PurePath(fn)
-    return base_path(instance)/f'{instance.audio_filename}{filename.suffix}'
+    return base_path(instance)/f'{instance.audio_filename}__upload{filename.suffix}'
 
 def upload_data(instance, fn, filetype):
     return base_path(instance)/f'{instance.audio_filename}.{filetype}'
@@ -44,17 +45,17 @@ class TranscriptionTask(models.Model):
     corrected = models.BooleanField(default=False)
 
     #`blank=True` `null=True` since the files are created and saved later in the pipeline
-    media_file = models.FileField(upload_to=upload_media)
-    wav_file = models.FileField(upload_to=part(upload_data, filetype='wav'), blank=True, null=True)
-    seg_file = models.FileField(upload_to=part(upload_data, filetype='seg'), blank=True, null=True)
-    stm_file = models.FileField(upload_to=part(upload_data, filetype='stm'), blank=True, null=True)
-    txt_file = models.FileField(upload_to=part(upload_data, filetype='txt'), blank=True, null=True)
-    vtt_file = models.FileField(upload_to=part(upload_data, filetype='vtt'), blank=True, null=True)
+    media_file = models.FileField(upload_to=upload_media, max_length=300)
+    wav_file = models.FileField(upload_to=part(upload_data, filetype='wav'), blank=True, null=True, max_length=300)
+    seg_file = models.FileField(upload_to=part(upload_data, filetype='seg'), blank=True, null=True, max_length=300)
+    stm_file = models.FileField(upload_to=part(upload_data, filetype='stm'), blank=True, null=True, max_length=300)
+    txt_file = models.FileField(upload_to=part(upload_data, filetype='txt'), blank=True, null=True, max_length=300)
+    vtt_file = models.FileField(upload_to=part(upload_data, filetype='vtt'), blank=True, null=True, max_length=300)
 
-    conversion_log = models.FileField(upload_to=part(upload_logs, filetype='conversion'), blank=True, null=True)
-    seg_log = models.FileField(upload_to=part(upload_logs, filetype='segmentation'), blank=True, null=True)
-    asr_log = models.FileField(upload_to=part(upload_logs, filetype='asr'), blank=True, null=True)
-    vtt_log = models.FileField(upload_to=part(upload_logs, filetype='vtt'), blank=True, null=True)
+    conversion_log = models.FileField(upload_to=part(upload_logs, filetype='conversion'), blank=True, null=True, max_length=300)
+    seg_log = models.FileField(upload_to=part(upload_logs, filetype='segmentation'), blank=True, null=True, max_length=300)
+    asr_log = models.FileField(upload_to=part(upload_logs, filetype='asr'), blank=True, null=True, max_length=300)
+    vtt_log = models.FileField(upload_to=part(upload_logs, filetype='vtt'), blank=True, null=True, max_length=300)
 
     class Meta:
         ordering = ['-date_time']
@@ -84,11 +85,12 @@ def upload_correction(instance, fn):
         # Changing the name can't be done in a Storage class, since it should only be used for task-related files
         i = 0
         base_name = base_path(instance.task)/"correct-vtt"
-        file_name = base_name/f'{instance.task.audio_filename}__{i:03d}.vtt'
-        while default_storage.exists(file_name):
+        while True:
+            file_name = base_name/f'{instance.task.audio_filename}__{instance.user.pk:04d}__correct__{i:03d}.vtt'
+            if not default_storage.exists(file_name):
+                break
             i += 1
-            file_name = base_name/f'{instance.task.audio_filename}__{i:03d}.vtt'
-        return str(file_name)     
+        return file_name   
     else:
         now = datetime.datetime.now()
         return pathlib.PurePath(settings.MEDIA_ROOT)/str(instance.user)/'origin_unknown'/ \
@@ -97,7 +99,7 @@ def upload_correction(instance, fn):
 class TranscriptionCorrection(models.Model):
     user = models.ForeignKey(auth.get_user_model(), on_delete=models.CASCADE, related_name='corrections')
     task = models.ForeignKey(TranscriptionTask, on_delete=models.CASCADE, related_name='corrections', blank=True, null=True)
-    correction_file = models.FileField(upload_to=upload_correction)
+    correction_file = models.FileField(upload_to=upload_correction, max_length=300)
     first_commit = models.DateTimeField(auto_now_add=True)
     last_commit = models.DateTimeField(verbose_name='last upload', auto_now=True)
 
