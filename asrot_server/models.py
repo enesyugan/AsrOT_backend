@@ -80,17 +80,23 @@ class TranscriptionTask(models.Model):
 
 def upload_correction(instance, fn):
     filename = pathlib.PurePath(fn)
-
+  
     if instance.task != None:
         # Changing the name can't be done in a Storage class, since it should only be used for task-related files
         i = 0
         base_name = base_path(instance.task)/"correct-vtt"
+        base_name = base_name/f'{instance.task.audio_filename}__{instance.user.pk:04d}__correct'
+        if instance.finished:
+            base_name = f'{base_name}__finished'
+
         while True:
-            file_name = base_name/f'{instance.task.audio_filename}__{instance.user.pk:04d}__correct__{i:03d}.vtt'
+          #  file_name = base_name/f'{instance.task.audio_filename}__{instance.user.pk:04d}__correct__{i:03d}.vtt'
+            file_name = f'{base_name}__{i:03d}.vtt'
             if not default_storage.exists(file_name):
                 break
             i += 1
-        return file_name   
+        return file_name  
+
     else:
         now = datetime.datetime.now()
         return pathlib.PurePath(settings.MEDIA_ROOT)/str(instance.user)/'origin_unknown'/ \
@@ -102,6 +108,7 @@ class TranscriptionCorrection(models.Model):
     correction_file = models.FileField(upload_to=upload_correction, max_length=300)
     first_commit = models.DateTimeField(auto_now_add=True)
     last_commit = models.DateTimeField(verbose_name='last upload', auto_now=True)
+    finished = models.BooleanField(default=False)
 
     class Meta:
         ordering = ['task', 'user', '-last_commit']

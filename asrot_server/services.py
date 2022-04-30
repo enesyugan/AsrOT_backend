@@ -109,7 +109,7 @@ def create_correction_clip(task_id, user, audio,
     return new_clip
 
 
-def create_vtt_correction(user, vtt_data, task_id, vtt_name):
+def create_vtt_correction(user, vtt_data, task_id, vtt_name, finished=False):
     if task_id is None:
         for line in vtt_data.split('\n'):
                 if "NOTE task_id:" in line: 
@@ -133,13 +133,29 @@ def create_vtt_correction(user, vtt_data, task_id, vtt_name):
             user.save()
 
     vtt_file = base.ContentFile(vtt_data, vtt_name)
-
-    correction = models.TranscriptionCorrection(
-        user=user,
-        correction_file=vtt_file,
-        task=task,
-    )
-
+ 
+    if finished:
+        try:
+            correction = models.TranscriptionCorrection.objects.filter(task=task,finished=finished).latest('last_commit')
+            print(correction.correction_file)    
+            #what if task is None
+            correction.correction_file=vtt_file      
+        except Exception as e:
+            print(f"No correction found: {e}")
+            correction = models.TranscriptionCorrection(
+                user=user,
+                correction_file=vtt_file,
+                task=task,
+                finished=finished
+            )
+    else:
+  #  vtt_file = base.ContentFile(vtt_data, vtt_name)
+        correction = models.TranscriptionCorrection(
+            user=user,
+            correction_file=vtt_file,
+            task=task,
+            finished=finished
+        )
     try:
         correction.full_clean()
         correction.save()
@@ -147,7 +163,7 @@ def create_vtt_correction(user, vtt_data, task_id, vtt_name):
         print(f"Error: {e}")
         #raise rf_serializers.ValidationError(e) das fürt im Frontend zu error
     
-
+    print(correction)
     return correction
 
 

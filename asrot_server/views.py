@@ -196,6 +196,7 @@ class SetVttCorrectionApi(APIView):
         vtt = rf_serializers.CharField(required=True)
         task_id = rf_serializers.UUIDField(required=False, default=None)
         vtt_name = rf_serializers.CharField(required=False, max_length=500, default='unk')
+        finished = rf_serializers.BooleanField(default=False)
 
         def validate_task_id(self, value):
             if value is None:
@@ -208,12 +209,13 @@ class SetVttCorrectionApi(APIView):
     def post(self, request):
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-
+     
         correction = services.create_vtt_correction(
             user=request.user,
             vtt_data=serializer.validated_data['vtt']+'\n',
             task_id=serializer.validated_data['task_id'],
             vtt_name=serializer.validated_data['vtt_name'],
+            finished=serializer.validated_data['finished']
         )
 
         return Response({}, status=status.HTTP_200_OK)
