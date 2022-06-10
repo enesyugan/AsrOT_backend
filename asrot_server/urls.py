@@ -15,11 +15,13 @@ basic_pattern = [
         path(sec_settings.gettask_api, views.GetTaskApi.as_view(), ),
         path(sec_settings.getmedia_api, views.GetMediaApi.as_view(), ),
         path(sec_settings.getcorrectedvtt_api, views.GetCorrectedVttApi.as_view(), ),
-        path('commandclips/', views.CreateCorrectionClipView.as_view(), ),
-        path('getalltasks/', views.GetAllTasksView.as_view(), ),
-        path('assigntask/', views.CreateAssignmentView.as_view(), ),
-        path('getmediaurl/', views.GetMediaUrlApi.as_view(), ),
-        path('getcsvlink/', views.GetCSVLinksApi.as_view(), ),
+        path(sec_settings.commandclips, views.CreateCorrectionClipView.as_view(), ),
+        path(sec_settings.getalltasks, views.GetAllTasksView.as_view(), ),
+        path(sec_settings.assigntask, views.CreateAssignmentView.as_view(), ),
+        path(sec_settings.getmediaurl, views.GetMediaUrlApi.as_view(), ),
+        path(sec_settings.getcsvlink, views.GetCSVLinksApi.as_view(), ),
+        path(sec_settings.getcorrectedlist, views.GetCorrectedListApi.as_view(), ),
+        path(sec_settings.getlistenertask, views.GetListenerApi.as_view(), ),
 ]
 
 urlpatterns = [

@@ -32,6 +32,78 @@ base_data_path_unk = sec_settings.base_data_path_unk
 base_data_path = sec_settings.base_data_path
 server_base_path = sec_settings.server_base_path
 
+class GetListenerApi(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    class InputSerializer(rf_serializers.Serializer):
+        taskId = rf_serializers.CharField(required=True)
+        userId = rf_serializers.CharField(required=True)
+
+        def validate_taskId(self, value):
+            if not models.TranscriptionTask.objects.filter(task_id=value).exists():
+                raise rf_serializers.ValidationError({'taskId': 'Must point to a valid task iD'})
+            return value
+
+
+    class OutputSerializer(rf_serializers.Serializer):
+        vtt = rf_serializers.CharField()
+ 
+
+    def post(self, request):
+        serializer = self.InputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        ## TODO should be in selectors.py
+
+        queryset =  models.TranscriptionCorrection.objects.select_related('user','task').filter(finished=True, user_id=serializer.validated_data['userId'], task_id=serializer.validated_data['taskId'])
+
+
+        if not queryset:
+            print("GetListenerApi")
+            if not task.vtt_file:
+                return Response({'error': "There is no vtt file related to the given taskId: {} and userId: {}".format(serializer.validated_data['taskId'], serializer.validated_data['userId'])},
+                        status=status.HTTP_404_NOT_FOUND)
+
+            out_serializer = self.OutputSerializer(instance=task)
+            return Response(out_serializer.data, status=status.HTTP_200_OK)
+
+        correction = queryset.order_by('-last_commit').first()
+
+        out_serializer = self.OutputSerializer(instance=correction)
+        return Response(out_serializer.data, status=status.HTTP_200_OK)
+
+class GetCorrectedListApi(APIView):
+    permission_classes = [IsAuthenticated]
+
+    class OutputSerializer(rf_serializers.Serializer):
+        task_user = rf_serializers.EmailField(source='task.user.email')
+        corrected_user = rf_serializers.EmailField(source='user.email')
+        date_transcribed = rf_serializers.DateTimeField(source='task.date_time')
+        date_corrected = rf_serializers.DateTimeField(source='last_commit')
+        language = rf_serializers.CharField(max_length=500, source='task.language')
+        finished = rf_serializers.BooleanField()        
+        task_name = rf_serializers.CharField(max_length=500, source='task.task_name')
+        id = rf_serializers.UUIDField( source="task.task_id" )
+        corrected_user_id = rf_serializers.CharField(source='user.id')
+
+    
+    class Paginator(pagination.PageNumberPagination):
+        page_size = 100
+        page_query_param = 'page'
+        page_size_query_param = 'items_per_page'
+
+    def get(self, request, *args, **kwargs):
+        if not request.user.can_make_assignments:
+            raise rf_serializers.ValidationError({'error':"No Permission"})
+            
+
+        queryset =  models.TranscriptionCorrection.objects.select_related('user','task').filter(finished=True)
+        paginator = self.Paginator()        
+        page = paginator.paginate_queryset(queryset, request, self)     
+        serializer = self.OutputSerializer(page, many=True)      
+ 
+        return paginator.get_paginated_response(serializer.data)
+
+
 class GetCSVLinksApi(APIView):
     permission_classes = [IsAuthenticated]
 
