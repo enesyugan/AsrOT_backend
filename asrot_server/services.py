@@ -58,11 +58,10 @@ def create_task(task_name, user, audiofile, language):
         media_file=audiofile,
     )
     try:
-        print("§§")
         new_task.full_clean()
         new_task.save()
     except Exception as e:
-        print(e)
+        print("Error: {}".format(e))
         raise rf_serializers.ValidationError(e)
     print("dd")   
     new_task.save()

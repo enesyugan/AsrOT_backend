@@ -29,6 +29,7 @@ DEBUG = sec_settings.debug
 ALLOWED_HOSTS = sec_settings.allowed_hosts
 
 CORS_ALLOW_ALL_ORIGINS = sec_settings.cors_allow_all_origins
+
 # Application definition
 
 INSTALLED_APPS = [

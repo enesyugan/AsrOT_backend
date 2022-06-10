@@ -114,7 +114,7 @@ class TranscriptionCorrection(models.Model):
         ordering = ['task', 'user', '-last_commit']
     
     def __str__(self):
-        return str(self.user) + 'correction done task_id: ' + str(self.task_id)
+        return str(self.user) + ' correction table task_id: ' + str(self.task_id)
 
     @property
     def vtt(self):
