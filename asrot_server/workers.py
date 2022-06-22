@@ -10,6 +10,7 @@ from . import worker_process as worker
 collector_stt_ar = worker.Collector(worker.asr_ar_proc, "STT-AR", sort=True)
 collector_stt_de = worker.Collector(worker.asr_de_proc, "STT-DE", sort=True)
 collector_stt_en = worker.Collector(worker.asr_en_proc, "STT-EN", sort=True)
+collector_stt_ua = worker.Collector(worker.asr_ua_proc, "STT-UA", sort=True)
 
 
 """
@@ -88,6 +89,8 @@ def asr_worker(signal: bytes, segmentation: str, language: str) -> 'tuple[str]':
         collector = collector_stt_ar
     elif language == "de":
         collector = collector_stt_de
+    elif language == "ua":
+        collector = collector_stt_ua
     else:
         raise Exception('Unsupported language')
 

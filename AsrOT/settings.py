@@ -15,7 +15,7 @@ from . import sec_settings
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 media = sec_settings.media #"/project/asr_systems/LT2022/data/datoid"
-languages_supported=['ar', 'de', 'en']
+languages_supported=['ar', 'de', 'en', 'ua']
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/3.2/howto/deployment/checklist/
