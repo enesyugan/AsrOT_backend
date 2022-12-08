@@ -73,8 +73,11 @@ class TranscriptionTask(models.Model):
 
     @property
     def vtt(self):
-        with self.vtt_file.open('r') as file:
-            return file.read()
+        try:
+            with self.vtt_file.open('r') as file:
+                return file.read()
+        except Exception as e:
+            print(f"Error: {e}")
 
 
 
@@ -86,6 +89,7 @@ def upload_correction(instance, fn):
         i = 0
         base_name = base_path(instance.task)/"correct-vtt"
         base_name = base_name/f'{instance.task.audio_filename}__{instance.user.pk:04d}__correct'
+ #       print(base_name)
         if instance.finished:
             base_name = f'{base_name}__finished'
 
