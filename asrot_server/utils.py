@@ -15,6 +15,8 @@ import sys
 import numpy as np
 import wave
 
+import requests
+
 base_path = sec_settings.server_base_path
 
 
@@ -144,8 +146,21 @@ def pipe(task: models.TranscriptionTask, audio, file_ext):
         print(task.audio_filename)
 
         exceptions = None
-        segmentation = get_segments(audio_bytes, task.audio_filename)
+        if False:
+            segmentation = get_segments(audio_bytes, task.audio_filename)
+            print("===")
+            print(segmentation)
+            print("===")
 
+        else:
+            segmenter_out = requests.post("http://i13hpc51.ira.uka.de:8080/segmenter/"+task.language+"/infer", files={"audio": audio_bytes})
+            print(segmenter_out.json())
+            segmentation = ""
+            for s, e in segmenter_out.json():
+                segmentation += (task.audio_filename+"-%07d_%07d"%(s*100,e*100)+" "+task.audio_filename+" %.2f %.2f"%(s,e)+"\n")
+        print("=====")
+        print(segmentation)
+        print("))")
         if exceptions:
             print(exceptions)
             err = ""
