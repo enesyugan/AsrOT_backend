@@ -5,12 +5,14 @@ import threading
 
 from . import worker_process as worker
 
+import requests
 
 
 collector_stt_ar = worker.Collector(worker.asr_ar_proc, "STT-AR", sort=True)
 collector_stt_de = worker.Collector(worker.asr_de_proc, "STT-DE", sort=True)
 collector_stt_en = worker.Collector(worker.asr_en_proc, "STT-EN", sort=True)
 collector_stt_ua = worker.Collector(worker.asr_ua_proc, "STT-UA", sort=True)
+
 
 
 """
@@ -25,7 +27,7 @@ LANGUAGE_CHOICES = [
 LANGUAGE_CHOICES = [
     ('de', 'German'),
     ('en', 'English'),
-    ('ar', 'Arabic'),
+    
 ]
 
 
@@ -90,9 +92,10 @@ def asr_worker(signal: bytes, segmentation: str, language: str) -> 'tuple[str]':
     elif language == "de":
         collector = collector_stt_de
     elif language == "ua":
-        collector = collector_stt_ua
+        collector = collector_stt_ua      
     else:
-        raise Exception('Unsupported language')
+        collector = None
+        #raise Exception('Unsupported language')
 
     results = ""
     for idx, line in enumerate(segmentation.splitlines()):
@@ -111,19 +114,32 @@ def asr_worker(signal: bytes, segmentation: str, language: str) -> 'tuple[str]':
             continue
 
         b_signal = signal[start:end]
-        base64_signal = base64.b64encode(b_signal)
-        str_signal = base64_signal.decode('latin-1')
-        str_signal =  do_adapt_for_worker(str_signal)
-        str_signal = str_signal.replace('\r', '').replace('\n', '')
-        #str_signal = str_signal +"\t" +"\n"
-        thread_id = threading.get_ident()
-        c_req = {'data': str_signal, 'id': thread_id}
-        collector.put(c_req)
-        res = collector.get_res(thread_id)
-        collector.del_id(thread_id)
+        if language == "unknown":
+            res = "<empty>"
+        elif language != "ua" and language != "ar": 
+            asr_out = requests.post("http://i13hpc51.ira.uka.de:8080/asr/"+language+"/infer", files={"audio": b_signal})
+            if not asr_out.json(): 
+                res = "<empty>"
+            else:
+                res = asr_out.json()
+        else:
+            base64_signal = base64.b64encode(b_signal)
+            str_signal = base64_signal.decode('latin-1')
+            str_signal =  do_adapt_for_worker(str_signal)
+            str_signal = str_signal.replace('\r', '').replace('\n', '')
+            #str_signal = str_signal +"\t" +"\n"
+            thread_id = threading.get_ident()
+            c_req = {'data': str_signal, 'id': thread_id}
+            if collector:
+                collector.put(c_req)
+                res = collector.get_res(thread_id)
+                collector.del_id(thread_id)
+            else: 
+                res = "<empty>"
         results += "{} {} {} \n".format(tokens[-2], tokens[-1], res)
 
-    return results, "nothing"           
+    return results, "nothing"  
+
 
 
 """
