@@ -47,7 +47,7 @@ def create_task(task_name, user, audiofile, language):
     print(user.restricted_account)
     if user.restricted_account:
         if file_sizemb > 800:
-            raise rf_serializers.ValidationError({"file size": "You have a restricted account. Your media file must be smaller than 10 mb. Please write an email to administrators to allow for unlimited upload size."})
+            raise rf_serializers.ValidationError({"file size": "You have a restricted account. Your media file must be smaller than 800 mb. Please write an email to administrators to allow for unlimited upload size."})
 
     new_task = models.TranscriptionTask(
         task_name=task_name,
@@ -135,7 +135,10 @@ def create_vtt_correction(user, vtt_data, task_id, vtt_name, finished=False):
  
     if finished:
         try:
-            correction = models.TranscriptionCorrection.objects.filter(task=task,finished=finished).latest('last_commit')
+            correction = models.TranscriptionCorrection.objects.filter(
+								user=user,
+								task=task,
+								finished=finished).latest('last_commit')
             print(correction.correction_file)    
             #what if task is None
             correction.correction_file=vtt_file      
