@@ -3,6 +3,7 @@ from django.conf.urls import include
 
 from . import views
 from AsrOT import sec_settings
+from . import views_default
 
 
 basic_pattern = [
@@ -22,6 +23,14 @@ basic_pattern = [
         path(sec_settings.getcsvlink, views.GetCSVLinksApi.as_view(), ),
         path(sec_settings.getcorrectedlist, views.GetCorrectedListApi.as_view(), ),
         path(sec_settings.getlistenertask, views.GetListenerApi.as_view(), ),
+        path(sec_settings.getmediahash, views.GetMediaHashApi.as_view(), ),
+        path(sec_settings.checkhashstatus, views.CheckHashStatusApi.as_view(), ),
+        path(sec_settings.getvttviahash, views.GetVttViaHashApi.as_view(), ),
+        path(sec_settings.getalltasksdefault, views_default.GetAllTasksApi.as_view(), ),
+        path(sec_settings.settaskhash, views_default.SetTaskHashApi.as_view(), ),
+        path(sec_settings.getoriginalmedia, views_default.GetOriginalMediaApi.as_view(), ),
+        path(sec_settings.gettasksize, views_default.GetTaskSize.as_view(), ),
+        path(sec_settings.deletetask, views.DeleteTaskApi.as_view(), ),
 ]
 
 urlpatterns = [

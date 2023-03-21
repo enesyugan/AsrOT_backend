@@ -34,7 +34,7 @@ def selfassign_task(task_id):
     user.save()
     return True
 
-def create_task(task_name, user, audiofile, language):
+def create_task(task_name, user, audiofile, language, media_hash="missed"):
     ext = pathlib.PurePath(audiofile.name).suffix
     file_name = pathlib.PurePath(audiofile.name).stem
     file_name = file_name.replace('/','_').replace('\\','_').replace(' ','-')
@@ -56,6 +56,7 @@ def create_task(task_name, user, audiofile, language):
         audio_filesize=file_sizemb,
         language=language,
         media_file=audiofile,
+        media_hash=media_hash,
     )
     try:
         new_task.full_clean()
@@ -144,6 +145,7 @@ def create_vtt_correction(user, vtt_data, task_id, vtt_name, finished=False):
             correction.correction_file=vtt_file      
         except Exception as e:
             print(f"No correction found: {e}")
+            print("Creating new Correction.")
             correction = models.TranscriptionCorrection(
                 user=user,
                 correction_file=vtt_file,

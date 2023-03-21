@@ -8,9 +8,12 @@ from wsgiref.util import FileWrapper
 
 from django import http
 from django.http import StreamingHttpResponse
+from django.core.exceptions import ObjectDoesNotExist
 
 import pathlib
-from datetime import datetime
+#from datetime import datetime
+import datetime
+from django.utils import timezone
 import os
 import wave
 import uuid
@@ -19,18 +22,42 @@ import requests
 import glob
 import re
 import mimetypes
+import shutil
 
 from users.models import CustomUser
 from users.permissions import CanMakeAssignments
 from . import models
 from . import services
 from . import selectors
+from . import utils
 import csv
 from AsrOT import settings, sec_settings
 
 base_data_path_unk = sec_settings.base_data_path_unk
 base_data_path = sec_settings.base_data_path
 server_base_path = sec_settings.server_base_path
+
+class GetMediaHashApi(APIView):
+    permission_classes = [IsAuthenticated]
+
+    class InputSerializer(rf_serializers.Serializer):
+        mediaName = rf_serializers.CharField(required=True)
+        mediaSize = rf_serializers.CharField(required=True)
+
+    class OutputSerializer(rf_serializers.Serializer):
+        mediaHash = rf_serializers.CharField()
+
+    def post(self, request):
+        serializer = self.InputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        hash_string = serializer.validated_data["mediaName"]+serializer.validated_data["mediaSize"]
+        mediaHash = utils.encrypt_data(hash_string)
+        
+        out_serializer = self.OutputSerializer(instance={"mediaHash": mediaHash})
+        return Response(out_serializer.data, status=status.HTTP_200_OK)
+        
+
 
 class GetListenerApi(APIView):
     permission_classes = [IsAuthenticated]
@@ -62,7 +89,8 @@ class GetListenerApi(APIView):
             if not task.vtt_file:
                 return Response({'error': "There is no vtt file related to the given taskId: {} and userId: {}".format(serializer.validated_data['taskId'], serializer.validated_data['userId'])},
                         status=status.HTTP_404_NOT_FOUND)
-
+            #hier ist der Fall das es nur ein finshed gibt hier noch mal queryset anlegen ohne den finished filter, dann noch mal prüfen ob 
+            #queryset wenn nicht die instanz returnen ansonsten den '-last_commit'
             out_serializer = self.OutputSerializer(instance=task)
             return Response(out_serializer.data, status=status.HTTP_200_OK)
 
@@ -173,7 +201,7 @@ class GetMediaUrlApi(APIView):
             return Response({'error': "There is no task with given taskId."} \
                                 , status=status.HTTP_404_NOT_FOUND) 
         mediaPath = str(task.media_file)
-        
+
         #mediaUrl = "https://i13hpc29.ira.uka.de/media/" + str(mediaPath.split("media/")[-1])
         mediaUrl = sec_settings.media_url + str(mediaPath.split("media/")[-1])
         body = {}
@@ -204,19 +232,18 @@ class GetCorrectedVttApi(APIView):
         serializer.is_valid(raise_exception=True)
         ## TODO should be in selectors.py
         task = models.TranscriptionTask.objects.get(task_id=serializer.validated_data['taskId'])
-        
+        print("11")
         if not task.corrections.all().filter(**{'user':request.user}).exists() or serializer.validated_data['original']:
-            print("HER")
+            print("222")
             if not task.vtt_file:
                 return Response({'error': "There is no vtt file related to the given taskId. The task may still be in progress"},
                         status=status.HTTP_404_NOT_FOUND)
-
+            print("222.5555")
             out_serializer = self.OutputSerializer(instance=task)
             return Response(out_serializer.data, status=status.HTTP_200_OK)
 
             #return Response({'error': "No corrected file for given task"}, status=status.HTTP_404_NOT_FOUND)
-
-
+        print("4444")
 
         ## TODO should be in selectors.py 
         #correction = task.corrections.all().order_by('-last_commit').first()
@@ -460,7 +487,160 @@ class GetVttApi(APIView):
         out_serializer = self.OutputSerializer(instance=task)
         return Response(out_serializer.data, status=status.HTTP_200_OK)
 
+class GetVttViaHashApi(APIView):
+    permission_classes = [IsAuthenticated]
 
+    class InputSerializer(rf_serializers.Serializer):
+        mediaHash = rf_serializers.CharField(required=True)
+
+        def validate_mediaHash(self, value):
+            if not models.TranscriptionTask.objects.filter(media_hash=value).exists():
+                raise rf_serializers.ValidationError({'mediaHash': 'Must point to a valid hash'})
+            return value
+
+
+    class OutputSerializer(rf_serializers.Serializer):
+        vtt = rf_serializers.CharField()
+ 
+    #TODO this should be a GET request, with the id passed in either the URL or the query_params
+    def post(self, request):
+        serializer = self.InputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        ## should be in selectors.py
+        task = models.TranscriptionTask.objects.filter(media_hash=serializer.validated_data['mediaHash']).first()
+     
+        try:
+           if not task.corrections.all().filter(**{'user':request.user}).exists():
+               if not task.vtt_file:
+                   return Response({'error': "There is no vtt file related to the given taskId. The task may still be in progress"}, 
+                               status=status.HTTP_404_NOT_FOUND) 
+
+               out_serializer = self.OutputSerializer(instance=task)
+
+               return Response(out_serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            print("GetVttViaHash Error: {}".format(e))
+        ## TODO should be in selectors.py
+        #correction = task.corrections.all().order_by('-last_commit').first()
+        correction = task.corrections.all()
+        correction =  correction.filter(**{'user':request.user})
+        correction = correction.order_by('-last_commit').first()
+
+        out_serializer = self.OutputSerializer(instance=correction)
+        return Response(out_serializer.data, status=status.HTTP_200_OK)
+
+
+class DeleteTaskApi(APIView):
+    permission_classes = [IsAuthenticated]
+
+    class InputSerializer(rf_serializers.Serializer):
+        mediaHash = rf_serializers.CharField(max_length=256, required=True)
+    
+    def post(self, request):
+        serializer = self.InputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        task = models.TranscriptionTask.objects.filter(media_hash=serializer.validated_data['mediaHash']).first()
+        if task == None: return Response({"error": "This task does not exist"}, status=status.HTTP_404_NOT_FOUND)
+        if task.user != request.user:
+            return Response({'error': "You can only delete the tasks you created. You did not create the task you want to delete"},
+                                status=status.HTTP_404_NOT_FOUND)
+        else:
+            task_dir = str(os.path.join(pathlib.PurePath(settings.MEDIA_ROOT),task.language.upper(), task.audio_filename))
+            print(task_dir)
+            shutil.rmtree(task_dir)
+            task.delete()
+            task = models.TranscriptionTask.objects.filter(media_hash=serializer.validated_data['mediaHash']).first()
+            print("does task exists: {}".format(task))
+
+        return Response(status=status.HTTP_200_OK)        
+
+
+class CheckHashStatusApi(APIView):
+    permission_classes = [IsAuthenticated]
+
+    class InputSerializer(rf_serializers.Serializer):
+        mediaHash = rf_serializers.CharField(max_length=256, required=True)
+
+    class OutputSerializer(rf_serializers.Serializer):
+        exists = rf_serializers.BooleanField()
+        status = rf_serializers.CharField()
+        task_id = rf_serializers.CharField()
+        duration = rf_serializers.CharField()
+
+    def return_nulls(self):
+        res={}
+        res["exists"] = False
+        res["status"] = "NULL"
+        res["task_id"] = "NULL"
+        res["duration"] = "NULL"
+        out_serializer = self.OutputSerializer(instance=res)
+        return Response(out_serializer.data, status=status.HTTP_200_OK)   
+
+    def handle_failed_task(self, task):
+        task_dir = str(os.path.join(pathlib.PurePath(settings.MEDIA_ROOT),task.language.upper(), task.audio_filename))
+        shutil.rmtree(task_dir)
+        task.delete()
+        self.return_nulls()
+
+    def post(self, request):
+        serializer = self.InputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        res = {}
+        task = models.TranscriptionTask.objects.filter(media_hash=serializer.validated_data['mediaHash']).first()
+        print(task)
+        try:
+          if task:    
+              print(task.status)
+              if task.status == "done": 
+                res["exists"] = True
+                res["status"] = task.status
+                res["task_id"] = task.task_id
+                res["duration"] = "NULL"
+                out_serializer = self.OutputSerializer(instance=res)
+                return Response(out_serializer.data, status=status.HTTP_200_OK)
+              if task.status == "failed":
+                self.handle_failed_task(task)
+              res["exists"] = True
+              res["status"] = task.status
+              res["task_id"] = task.task_id
+              with wave.open(task.wav_file, "rb") as wave_file:
+                  frame_rate = wave_file.getframerate()
+                  nframes = wave_file.getnframes()
+              duration = nframes / frame_rate
+              current_time = timezone.now()
+              time_pased = current_time -task.date_time
+
+              duration_datetime = datetime.timedelta(seconds=duration)
+              time_difference =  duration_datetime - time_pased
+             # time_difference =  duration_datetime -time_pased
+              print("Check Hash Status; how much time left until transcription finished: {}".format(time_difference))
+
+              if str(time_difference).startswith("-1"):
+                time_difference =  datetime.timedelta(seconds=duration//2)
+              elif str(time_difference).startswith("-"):
+                if task.status != "failed":
+                    task.status = "failed"
+                    task.full_clean()
+                    task.save()
+                    res["status"]= "failed"
+              str_time_difference = str(time_difference)
+              print(str_time_difference)
+              str_time_difference = str_time_difference.rsplit('.',1)[0]
+              res["duration"] = str_time_difference
+              
+              out_serializer = self.OutputSerializer(instance=res)
+              return Response(out_serializer.data, status=status.HTTP_200_OK)
+          else:
+              print("CheckHashStatusApi: media with hash: {} not found".format(serializer.validated_data['mediaHash']))
+              res["exists"] = False
+              res["status"] = "NULL"
+              res["task_id"] = "NULL"
+              res["duration"] = "NULL"
+              out_serializer = self.OutputSerializer(instance=res)
+              return Response(out_serializer.data, status=status.HTTP_200_OK)   
+        except Exception as e:
+            print(e)
+        
 
 class CreateTaskApi(APIView):
     permission_classes = [IsAuthenticated]
@@ -469,10 +649,12 @@ class CreateTaskApi(APIView):
         taskName = rf_serializers.CharField(required=True)
         audioFile = rf_serializers.FileField(required=True)
         sourceLanguage = rf_serializers.CharField(max_length=500, required=True)
+        mediaHash = rf_serializers.CharField(max_length=256, required=True)
         #translationLanguage = rf_serializers.CharField(max_length=500, required=False)
 
         def validate_sourceLanguage(self, value):
-            if not value in settings.languages_supported:
+           # if not value in settings.languages_supported:
+            if len(value) >3:
                 raise rf_serializers.ValidationError({"sourceLanguage": "You need to define one of the valid languages {}"\
 						.format(settings.languages_supported)})
             return value
@@ -481,7 +663,7 @@ class CreateTaskApi(APIView):
     def post(self, request):
 
         print(request.is_secure())     
-
+        print("TEST")
         serializer = self.InputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -489,7 +671,8 @@ class CreateTaskApi(APIView):
             task_name=serializer.validated_data['taskName'],
             user=request.user,
             audiofile=serializer.validated_data['audioFile'],
-            language=serializer.validated_data['sourceLanguage']
+            language=serializer.validated_data['sourceLanguage'],
+            media_hash=serializer.validated_data['mediaHash'],
         )
         
         return Response({'taskId': task.task_id}, status=status.HTTP_200_OK)
@@ -554,6 +737,7 @@ class GetAllTasksView(APIView):
         status = rf_serializers.CharField()
         date_time = rf_serializers.DateTimeField()
         language = rf_serializers.CharField()
+        media_hash = rf_serializers.CharField()
 
     #TODO configure default paginator in settings and switch to generic view
     class Paginator(pagination.PageNumberPagination):
@@ -561,10 +745,10 @@ class GetAllTasksView(APIView):
         page_query_param = 'page'
         page_size_query_param = 'items_per_page'
 
+    ##Body funktioniert mit get nicht denke ich
     def get(self, request, *args, **kwargs):
         filter_ser = self.FilterSerializer(data=request.query_params)
         filter_ser.is_valid(raise_exception=True)
-
         queryset = selectors.task_list(filters={
             'task_name__startswith': filter_ser.validated_data['name'],
         }).order_by('-date_time')

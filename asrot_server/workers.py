@@ -4,6 +4,7 @@ import numpy as np
 import threading
 
 from . import worker_process as worker
+from AsrOT import settings
 
 import requests
 
@@ -114,7 +115,8 @@ def asr_worker(signal: bytes, segmentation: str, language: str) -> 'tuple[str]':
             continue
 
         b_signal = signal[start:end]
-        if language == "unknown":
+        #if language == "other":
+        if not language in settings.languages_supported:
             res = "<empty>"
         elif language != "ua" and language != "ar": 
             asr_out = requests.post("http://i13hpc51.ira.uka.de:8080/asr/"+language+"/infer", files={"audio": b_signal})

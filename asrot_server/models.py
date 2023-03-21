@@ -32,6 +32,7 @@ class TranscriptionTask(models.Model):
     task_name = models.CharField(max_length=500)
     audio_filename = models.CharField(max_length=1000, null=False)
     audio_filesize = models.IntegerField(null=False)
+    media_hash = models.CharField(max_length=256,default="")
 
     assignees = models.ManyToManyField(auth.get_user_model(), 
         through='TaskAssignment', through_fields=('task', 'assignee'), 

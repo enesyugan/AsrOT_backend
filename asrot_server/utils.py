@@ -14,10 +14,16 @@ from datetime import datetime, timedelta
 import sys
 import numpy as np
 import wave
+import hashlib
 
 import requests
 
 base_path = sec_settings.server_base_path
+
+def encrypt_data(hash_string):
+    sha_signature = hashlib.sha256(hash_string.encode())
+    sha_signature = sha_signature.hexdigest()
+    return sha_signature
 
 
 def convert_to_wav(source, ext):
@@ -118,6 +124,9 @@ def write_log(lf, log, err=""):
 
 
 def pipe(task: models.TranscriptionTask, audio, file_ext):
+        task.status = "converting"
+        task.full_clean()
+        task.save()
 
         #Conversion
         audio_str, audio_bytes, log, pydub_err = convert_to_wav(audio, file_ext)
@@ -140,6 +149,9 @@ def pipe(task: models.TranscriptionTask, audio, file_ext):
                 wavfile.setframerate(16000)
                 wavfile.writeframesraw(base64.b64decode(audio_str.strip()))
 
+        task.status = "segmenting"
+        task.full_clean()
+        task.save()
 
         #Segmentation
         print(len(audio_bytes))
@@ -154,7 +166,7 @@ def pipe(task: models.TranscriptionTask, audio, file_ext):
 
         else:
             segmenter_out = requests.post("http://i13hpc51.ira.uka.de:8080/segmenter/"+task.language+"/infer", files={"audio": audio_bytes})
-            print(segmenter_out.json())
+            print(segmenter_out)
             segmentation = ""
             for s, e in segmenter_out.json():
                 segmentation += (task.audio_filename+"-%07d_%07d"%(s*100,e*100)+" "+task.audio_filename+" %.2f %.2f"%(s,e)+"\n")
@@ -187,7 +199,7 @@ def pipe(task: models.TranscriptionTask, audio, file_ext):
         task.stm_file.save('unused-name', base_files.ContentFile(segmentation))
 
         print('STM Done')
-        task.status = "transcription"
+        task.status = "transcripton"
         task.full_clean()
         task.save()
 
