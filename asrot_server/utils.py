@@ -15,16 +15,118 @@ import sys
 import numpy as np
 import wave
 import hashlib
+import time
 
 import requests
+import json
+from sseclient import SSEClient
+from threading import Thread
 
 base_path = sec_settings.server_base_path
+
+mediator_res = list()
 
 def encrypt_data(hash_string):
     sha_signature = hashlib.sha256(hash_string.encode())
     sha_signature = sha_signature.hexdigest()
     return sha_signature
 
+
+def read_text(sessionID, num_components, mediator_res):
+    messages = SSEClient(sec_settings.url + "/ltapi/stream?channel=" + sessionID)
+    print("==")
+    num_END = 0
+    for msg in messages:
+        data = json.loads(msg.data)
+        mediator_res.append(data)
+        if ("controll" in data and data["controll"] == "END"):
+            num_END += 1
+            if num_END >= num_components:
+                break;
+
+def send_start(url, sessionID, streamID, show_on_website, save_path):
+    print("Start sending audio")
+    data={'controll':"START"}
+    if show_on_website:
+        data["type"] = "lecture"
+        data["name"] = "Audioclient"
+    if save_path != "":
+        data["directory"] = save_path
+    info = requests.post(url + "/ltapi/" + sessionID + "/" + streamID + "/append", json=json.dumps(data))
+    if info.status_code != 200:
+        print(res.status_code,res.text)
+        print("ERROR in starting session")
+
+def send_audio(audio_source, url, sessionID, streamID):
+    chunk = audio_source
+  #  chunk = audio_source.chunk_modify(chunk)
+    if len(chunk) == 0:
+        raise KeyboardInterrupt()
+    s = time.time()
+    e = s + len(chunk)/32000
+    print(type(chunk))
+    print(type(base64.b64encode(chunk).decode('ascii')))
+    data = {"b64_enc_pcm_s16le":base64.b64encode(chunk).decode("ascii"),"start":s,"end":e}
+    res = requests.post(url + "/ltapi/" + sessionID + "/" + streamID + "/append", json=json.dumps(data))
+    if res.status_code != 200:
+        print(res.status_code,res.text)
+        print("ERROR in sending audio")
+    raise KeyboardInterrupt()
+
+def send_end(url, sessionID, streamID):
+    print("Sending END.")
+    data={'controll': "END"}
+    res = requests.post(url + "/ltapi/" + sessionID + "/" + streamID + "/append", json=json.dumps(data))
+    if res.status_code != 200:
+        print(res.status_code,res.text)
+        print("ERROR in sending END message")
+       
+                    
+def send_session(url, sessionID, streamID, audio_source, show_on_website, upload_video, save_path):
+    try:
+        send_start(url, sessionID, streamID, show_on_website, save_path)
+        if not upload_video:
+           # while True:
+            send_audio(audio_source, url, sessionID, streamID)
+        else:
+            #send_video(audio_source.url, url, sessionID, streamID)
+            raise KeyboardInterrupt
+    except KeyboardInterrupt:
+        time.sleep(1)
+        send_end(url, sessionID, streamID)
+
+def set_graph(language):
+    d = {}
+    d["language"] = language
+    d["textseg"] = False
+    res = requests.post(sec_settings.url + "/ltapi/get_default_asr", json=json.dumps(d))
+    if res.status_code != 200:
+        print(res.status_code,res.text)
+        print("ERROR in requesting default graph for ASR")
+    sessionID, streamID = res.text.split()
+    graph=json.loads(requests.post(sec_settings.url+"/ltapi/"+sessionID+"/getgraph").text)
+    print("Graph:",graph)
+    p = dict()
+    num_components  = 0
+    for sender, reveiver in graph.items():
+        if sender.startswith("asr"):
+            p[sender] = {}
+            p[sender]["version"] = "offline"
+            p[sender]["segmenter"] = "SHAS"
+            p[sender]["language"] = language
+            p[sender]["max_segment_length"] = 15
+            p[sender]["min_segment_length"] = 1
+            if language == "de":
+                p[sender]["asr_server_de"] = "http://192.168.0.60:5008/asr/infer/de,de"
+        num_components += 1
+    print("NUM comps: {}".format(num_components))
+    res = requests.post(sec_settings.url + "/ltapi/" + sessionID + "/setproperties", json=json.dumps(p));
+    if res.status_code != 200:
+        print(res.status_code,res.text)
+        print("ERROR in setting properties")
+
+    return sessionID, streamID, graph, num_components
+    
 
 def convert_to_wav(source, ext):
         err={}
@@ -158,33 +260,41 @@ def pipe(task: models.TranscriptionTask, audio, file_ext):
         print(task.audio_filename)
 
         exceptions = None
-        if False:
-            segmentation = get_segments(audio_bytes, task.audio_filename)
-            print("===")
-            print(segmentation)
-            print("===")
-
-        else:
-            segmenter_out = requests.post("http://i13hpc51.ira.uka.de:8080/segmenter/"+task.language+"/infer", files={"audio": audio_bytes})
-            print(segmenter_out)
-            segmentation = ""
-            for s, e in segmenter_out.json():
-                segmentation += (task.audio_filename+"-%07d_%07d"%(s*100,e*100)+" "+task.audio_filename+" %.2f %.2f"%(s,e)+"\n")
-        print("=====")
-        print(segmentation)
-        print("))")
-        if exceptions:
-            print(exceptions)
-            err = ""
-            for key, value in exceptions.items():
-                err += "{} : {} \n".format(key,value)
-            print("Pipe failed: {}".format(err))
-            print(err)
-            write_log(task.conversion_log, log, err)
-            task.status = 'failed'
-            task.full_clean()
-            return
-
+        sessionID, streamID, graph, num_components = set_graph(task.language)
+        data={'controll':"INFORMATION"}
+        info = requests.post(sec_settings.url + "/ltapi/" + sessionID + "/" + streamID + "/append", json=json.dumps(data))
+        if info.status_code != 200:
+            print(res.status_code,res.text)
+            print("ERROR in requesting worker information")
+        print("info: {}".format(info))
+        t = Thread(target=read_text, args=(sessionID, num_components, mediator_res))
+        t.daemon = True
+        t.start()
+     
+        send_session(sec_settings.url, sessionID, streamID, audio_bytes, False, False, "")
+        t.join()   
+        segmentation = ""
+        text_hypo = ""
+        s_e_text = ""
+        for line in mediator_res:
+            print(line)
+            print(type(line))
+            is_session = line.get("session", None)
+            is_controll = line.get("controll", None)
+            sender = line.get("sender", None)
+            is_sender_asr = False
+            if sender == "asr:0":
+                is_sender_asr = True
+            if is_session and not is_controll and is_sender_asr:
+                print(line)
+                start = line["start"]
+                end = line["end"]
+                text = line.get("seq", "None")
+                text = text.strip() + "\n"
+                text_hypo += text
+                s_e_text_line = "{} {} {}".format(start, end, text)
+                s_e_text += s_e_text_line
+                segmentation += (task.audio_filename+"-%07d_%07d"%(start*100,end*100)+" "+task.audio_filename+" %.2f %.2f"%(start,end)+"\n")
 
         task.seg_file.save('unused-name', base_files.ContentFile(segmentation))
         
@@ -192,8 +302,6 @@ def pipe(task: models.TranscriptionTask, audio, file_ext):
         task.status = "stm"
         task.full_clean()
         task.save()
-
-
         #ToSTM
         segmentation = format_seg_as_stm(segmentation)
         task.stm_file.save('unused-name', base_files.ContentFile(segmentation))
@@ -202,24 +310,7 @@ def pipe(task: models.TranscriptionTask, audio, file_ext):
         task.status = "transcripton"
         task.full_clean()
         task.save()
-
-
-        #ASR
-        try:
-            text, log, *additional = workers.asr_worker(audio_bytes, segmentation, task.language)
-            text = text.strip()
-        except Exception as e:
-            print("Pipe failed: {}".format(e))
-            task.status = 'failed'
-            task.full_clean()
-            task.save()
-            return
         
-        print(sys.getdefaultencoding())           
-        text_hypo = ""
-        for line in text.split('\n'):
-            text_hypo += " ".join(line.split()[2:])
-            text_hypo += "\n"
 
         try:
             task.txt_file.save('unused-name', base_files.ContentFile(text_hypo))
@@ -236,7 +327,7 @@ def pipe(task: models.TranscriptionTask, audio, file_ext):
 
         #ToVtt
         try:
-            vtt, log = set_to_vtt(text, task.task_id)           
+            vtt, log = set_to_vtt(s_e_text, task.task_id)           
             task.vtt_file.save('unused-name', base_files.ContentFile(vtt))
             write_log(task.vtt_log, log)
         except Exception as e:
@@ -253,3 +344,6 @@ def pipe(task: models.TranscriptionTask, audio, file_ext):
         task.full_clean()
         task.save()
         return
+
+
+        
