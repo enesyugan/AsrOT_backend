@@ -24,7 +24,7 @@ from threading import Thread
 
 base_path = sec_settings.server_base_path
 
-mediator_res = list()
+
 
 def encrypt_data(hash_string):
     sha_signature = hashlib.sha256(hash_string.encode())
@@ -267,6 +267,7 @@ def pipe(task: models.TranscriptionTask, audio, file_ext):
             print(res.status_code,res.text)
             print("ERROR in requesting worker information")
         print("info: {}".format(info))
+        mediator_res = list()
         t = Thread(target=read_text, args=(sessionID, num_components, mediator_res))
         t.daemon = True
         t.start()
