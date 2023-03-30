@@ -23,6 +23,7 @@ import glob
 import re
 import mimetypes
 import shutil
+import zipfile
 
 from users.models import CustomUser
 from users.permissions import CanMakeAssignments
@@ -57,6 +58,90 @@ class GetMediaHashApi(APIView):
         out_serializer = self.OutputSerializer(instance={"mediaHash": mediaHash})
         return Response(out_serializer.data, status=status.HTTP_200_OK)
         
+
+class GetZipApi(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    class InputSerializer(rf_serializers.Serializer):
+        taskId = rf_serializers.CharField(required=True)
+        userId = rf_serializers.CharField(required=True)
+
+        def validate_taskId(self, value):
+            if not models.TranscriptionTask.objects.filter(task_id=value).exists():
+                raise rf_serializers.ValidationError({'taskId': 'Must point to a valid task iD'})
+            return value
+
+    def compress(self, zip_path, file_names):
+        print("File Paths:")
+        print(file_names)
+
+       
+
+        # Select the compression mode ZIP_DEFLATED for compression
+        # or zipfile.ZIP_STORED to just store the file
+        compression = zipfile.ZIP_STORED
+
+        # create the zip file first parameter path/name, second mode
+        zf = zipfile.ZipFile(zip_path, mode="w")
+        try:
+            for file_name in file_names:
+                file_name = str(file_name)
+                # Add file to the zip file
+                # first parameter file to zip, second filename in zip
+                zf.write(zip_path, file_name, compress_type=compression)
+
+        except FileNotFoundError:
+            print("An error occurred")
+        finally:
+            # Don't forget to close the file!
+            zf.close()
+
+
+    def post(self, request):
+        serializer = self.InputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        queryset =  models.TranscriptionCorrection.objects.select_related('user','task').filter(user_id=serializer.validated_data['userId'], task_id=serializer.validated_data['taskId'])
+
+        if not queryset:
+            print("GetListenerApi")
+            if not task.vtt_file:
+                return Response({'error': "There is no vtt file related to the given taskId: {} and userId: {}".format(serializer.validated_data['taskId'], serializer.validated_data['userId'])},
+                        status=status.HTTP_404_NOT_FOUND)
+            #hier ist der Fall das es nur ein finshed gibt hier noch mal queryset anlegen ohne den finished filter, dann noch mal prüfen ob 
+            #queryset wenn nicht die instanz returnen ansonsten den '-last_commit'
+           # out_serializer = self.OutputSerializer(instance=task)
+           # return Response(out_serializer.data, status=status.HTTP_200_OK)
+
+        correction = queryset.order_by('-last_commit').first()
+
+        print(type(correction))
+        print(correction.correction_file)
+        print(type(correction.correction_file))
+        task = models.TranscriptionTask.objects.get(task_id=serializer.validated_data['taskId'])
+        print("222")
+        if not task.media_file:
+            return Response({'error': "There is no data_path file related to the given taskId. The task may still be in progress"} \
+                                , status=status.HTTP_404_NOT_FOUND)
+
+        file_name = pathlib.PurePath(task.media_file.name)
+        media_path = str(task.media_file)
+
+        file_base_path = media_path.rsplit("/",1)[0]
+        print(file_name)
+        print("===")
+        print(file_base_path)
+        file_name = str(task.vtt_file).rsplit("/",1)[-1].rsplit(".",1)[0]
+        zip_path = os.path.join(file_base_path, file_name)
+        zip_path = zip_path +".zip"
+        self.compress(zip_path, [correction.correction_file, task.media_file])
+        zip_file = open(zip_path, 'rb')
+        try:
+            response = http.HttpResponse(zip_file, content_type='application/zip')
+            response['Content-Disposition'] = 'attachment; filename=name.zip'
+        except Exception as e:
+            print(e)
+        return response
 
 
 class GetListenerApi(APIView):

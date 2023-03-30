@@ -31,6 +31,7 @@ basic_pattern = [
         path(sec_settings.getoriginalmedia, views_default.GetOriginalMediaApi.as_view(), ),
         path(sec_settings.gettasksize, views_default.GetTaskSize.as_view(), ),
         path(sec_settings.deletetask, views.DeleteTaskApi.as_view(), ),
+        path(sec_settings.getzip, views.GetZipApi.as_view(), ),
 ]
 
 urlpatterns = [
