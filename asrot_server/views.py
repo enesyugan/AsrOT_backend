@@ -88,7 +88,7 @@ class GetZipApi(APIView):
                 file_name = str(file_name)
                 # Add file to the zip file
                 # first parameter file to zip, second filename in zip
-                zf.write(zip_path, file_name, compress_type=compression)
+                zf.write(file_name, os.path.basename(file_name), compress_type=compression)
 
         except FileNotFoundError:
             print("An error occurred")
@@ -115,11 +115,7 @@ class GetZipApi(APIView):
 
         correction = queryset.order_by('-last_commit').first()
 
-        print(type(correction))
-        print(correction.correction_file)
-        print(type(correction.correction_file))
         task = models.TranscriptionTask.objects.get(task_id=serializer.validated_data['taskId'])
-        print("222")
         if not task.media_file:
             return Response({'error': "There is no data_path file related to the given taskId. The task may still be in progress"} \
                                 , status=status.HTTP_404_NOT_FOUND)
@@ -128,20 +124,22 @@ class GetZipApi(APIView):
         media_path = str(task.media_file)
 
         file_base_path = media_path.rsplit("/",1)[0]
-        print(file_name)
-        print("===")
-        print(file_base_path)
         file_name = str(task.vtt_file).rsplit("/",1)[-1].rsplit(".",1)[0]
         zip_path = os.path.join(file_base_path, file_name)
         zip_path = zip_path +".zip"
-        self.compress(zip_path, [correction.correction_file, task.media_file])
-        zip_file = open(zip_path, 'rb')
+        self.compress(zip_path, [correction.correction_file, task.wav_file])
+        #zip_file = open(zip_path, 'rb')
         try:
-            response = http.HttpResponse(zip_file, content_type='application/zip')
-            response['Content-Disposition'] = 'attachment; filename=name.zip'
+            #response = http.HttpResponse(zip_file, content_type='application/zip')
+            #response['Content-Disposition'] = 'attachment; filename=name.zip'
+            response = http.HttpResponse(FileWrapper(open(zip_path,'rb')), content_type='application/zip')
+            response['Content-Disposition'] = 'attachment; filename="{}.zip"'.format(
+                        file_name
+                            )   
         except Exception as e:
             print(e)
         return response
+        
 
 
 class GetListenerApi(APIView):
@@ -176,9 +174,13 @@ class GetListenerApi(APIView):
                         status=status.HTTP_404_NOT_FOUND)
             #hier ist der Fall das es nur ein finshed gibt hier noch mal queryset anlegen ohne den finished filter, dann noch mal prüfen ob 
             #queryset wenn nicht die instanz returnen ansonsten den '-last_commit'
+          #  out_serializer = self.OutputSerializer(instance=task)
+           # return Response(out_serializer.data, status=status.HTTP_200_OK)
+        queryset =  models.TranscriptionCorrection.objects.select_related('user','task').filter(user_id=serializer.validated_data['userId'], task_id=serializer.validated_data['taskId'])
+        if not queryset:
             out_serializer = self.OutputSerializer(instance=task)
             return Response(out_serializer.data, status=status.HTTP_200_OK)
-
+            
         correction = queryset.order_by('-last_commit').first()
 
         out_serializer = self.OutputSerializer(instance=correction)
