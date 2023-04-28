@@ -702,9 +702,11 @@ class CheckHashStatusApi(APIView):
              # time_difference =  duration_datetime -time_pased
               print("Check Hash Status; how much time left until transcription finished: {}".format(time_difference))
 
-              if str(time_difference).startswith("-1"):
-                time_difference =  datetime.timedelta(seconds=duration//2)
-              elif str(time_difference).startswith("-"):
+              #if str(time_difference).startswith("-1"):
+              #  time_difference =  datetime.timedelta(seconds=duration//2)
+              #  print(time_difference)
+              #  print("ENE")
+              if str(time_difference).startswith("-"):
                 if task.status != "failed":
                     task.status = "failed"
                     task.full_clean()
