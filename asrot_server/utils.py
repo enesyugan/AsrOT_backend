@@ -37,12 +37,11 @@ def read_text(sessionID, num_components, mediator_res):
     print("==")
     num_END = 0
     for msg in messages:
+        if len(msg.data) == 0:
+            break
         data = json.loads(msg.data)
         mediator_res.append(data)
-        if ("controll" in data and data["controll"] == "END"):
-            num_END += 1
-            if num_END >= num_components:
-                break;
+
 
 def send_start(url, sessionID, streamID, show_on_website, save_path):
     print("Start sending audio")
@@ -57,21 +56,22 @@ def send_start(url, sessionID, streamID, show_on_website, save_path):
         print(res.status_code,res.text)
         print("ERROR in starting session")
 
-def send_audio(audio_source, url, sessionID, streamID):
+def send_audio(audio_source, url, sessionID, streamID, send_end_signal):
     chunk = audio_source
   #  chunk = audio_source.chunk_modify(chunk)
     if len(chunk) == 0:
         raise KeyboardInterrupt()
     s = time.time()
     e = s + len(chunk)/32000
-    print(type(chunk))
-    print(type(base64.b64encode(chunk).decode('ascii')))
+    #print("send_audio: {}".format(type(chunk)))
+    #print("send_audio: {}".format(type(base64.b64encode(chunk).decode('ascii'))))
     data = {"b64_enc_pcm_s16le":base64.b64encode(chunk).decode("ascii"),"start":s,"end":e}
     res = requests.post(url + "/ltapi/" + sessionID + "/" + streamID + "/append", json=json.dumps(data))
     if res.status_code != 200:
         print(res.status_code,res.text)
         print("ERROR in sending audio")
-    raise KeyboardInterrupt()
+    if send_end_signal:
+        raise KeyboardInterrupt()
 
 def send_end(url, sessionID, streamID):
     print("Sending END.")
@@ -87,7 +87,12 @@ def send_session(url, sessionID, streamID, audio_source, show_on_website, upload
         send_start(url, sessionID, streamID, show_on_website, save_path)
         if not upload_video:
            # while True:
-            send_audio(audio_source, url, sessionID, streamID)
+            send_end_signal = False
+            for cut_start in range(0, len(audio_source), 2500000):
+                if cut_start+2500000 >= len(audio_source):
+                    print("{}/{}".format(len(audio_source[cut_start: cut_start+2500000]), len(audio_source)))
+                    send_end_signal = True
+                send_audio(audio_source[cut_start: cut_start+2500000], url, sessionID, streamID, send_end_signal)
         else:
             #send_video(audio_source.url, url, sessionID, streamID)
             raise KeyboardInterrupt
@@ -97,15 +102,22 @@ def send_session(url, sessionID, streamID, audio_source, show_on_website, upload
 
 def set_graph(language):
     d = {}
-    d["language"] = language
-    d["textseg"] = False
-    res = requests.post(sec_settings.url + "/ltapi/get_default_asr", json=json.dumps(d))
+    try_graphs = 0
+    while try_graphs < 10:
+        d["language"] = language
+        d["textseg"] = False
+        res = requests.post(sec_settings.url + "/ltapi/get_default_asr", json=json.dumps(d))
+        if res.status_code != 200:
+            try_graphs += 1
+        if res.status_code == 200:
+            break
+  
     if res.status_code != 200:
         print(res.status_code,res.text)
         print("ERROR in requesting default graph for ASR")
     sessionID, streamID = res.text.split()
     graph=json.loads(requests.post(sec_settings.url+"/ltapi/"+sessionID+"/getgraph").text)
-    print("Graph:",graph)
+    print("Graph: {}, sessionID: {}".format(graph, sessionID))
     p = dict()
     num_components  = 0
     for sender, reveiver in graph.items():
