@@ -276,7 +276,7 @@ def pipe(task: models.TranscriptionTask, audio, file_ext):
         data={'controll':"INFORMATION"}
         info = requests.post(sec_settings.url + "/ltapi/" + sessionID + "/" + streamID + "/append", json=json.dumps(data))
         if info.status_code != 200:
-            print(res.status_code,res.text)
+            print(info.status_code,res.text)
             print("ERROR in requesting worker information")
         print("info: {}".format(info))
         mediator_res = list()

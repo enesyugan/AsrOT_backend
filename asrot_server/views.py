@@ -547,7 +547,8 @@ class DeleteTaskApi(APIView):
         else:
             task_dir = str(os.path.join(pathlib.PurePath(settings.MEDIA_ROOT),task.language.upper(), task.audio_filename))
             print(task_dir)
-            shutil.rmtree(task_dir)
+            if os.path.exists(task_dir):
+                shutil.rmtree(task_dir)
             task.delete()
             task = models.TranscriptionTask.objects.filter(media_hash=serializer.validated_data['mediaHash']).first()
             print("does task exists: {}".format(task))
@@ -578,8 +579,13 @@ class CheckHashStatusApi(APIView):
 
     def handle_failed_task(self, task):
         task_dir = str(os.path.join(pathlib.PurePath(settings.MEDIA_ROOT),task.language.upper(), task.audio_filename))
-        shutil.rmtree(task_dir)
-        task.delete()
+        print("Does dir exists: {}\n{}".format(task_dir, os.path.exists(task_dir)))
+        if os.path.exists(task_dir):
+            shutil.rmtree(task_dir)
+        print("deleted dirs")
+        task.delete() 
+        print("deleted task")
+
         self.return_nulls()
 
     def post(self, request):
@@ -590,7 +596,7 @@ class CheckHashStatusApi(APIView):
         print(task)
         try:
           if task:    
-              print(task.status)
+              print("Task status: {}".format(task.status))
               if task.status == "done": 
                 res["exists"] = True
                 res["status"] = task.status
@@ -598,7 +604,7 @@ class CheckHashStatusApi(APIView):
                 res["duration"] = "NULL"
                 out_serializer = self.OutputSerializer(instance=res)
                 return Response(out_serializer.data, status=status.HTTP_200_OK)
-              if task.status == "failed":
+              if task.status == "failed" or task.status != "done":
                 self.handle_failed_task(task)
               res["exists"] = True
               res["status"] = task.status
