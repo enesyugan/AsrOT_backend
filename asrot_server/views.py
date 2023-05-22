@@ -86,12 +86,24 @@ class GetZipApi(APIView):
         try:
             for file_name in file_names:
                 file_name = str(file_name)
+                if not os.path.exists(file_name):
+                    print("NOT FOUND \n")
+                    d = file_name.rsplit("/",1)[0]
+                    print(d)
+                    for fs in os.listdir(d):
+                        if fs.endswith(".wav"):
+                            print("....")
+                            file_name = str(os.path.join(d, fs))
+                            print(file_name)
+                print(file_name)
+                print("=====")
                 # Add file to the zip file
                 # first parameter file to zip, second filename in zip
                 zf.write(file_name, os.path.basename(file_name), compress_type=compression)
 
-        except FileNotFoundError:
+        except FileNotFoundError as fileerror:
             print("An error occurred")
+            print(fileerror)
         finally:
             # Don't forget to close the file!
             zf.close()
@@ -127,6 +139,7 @@ class GetZipApi(APIView):
         file_name = str(task.vtt_file).rsplit("/",1)[-1].rsplit(".",1)[0]
         zip_path = os.path.join(file_base_path, file_name)
         zip_path = zip_path +".zip"
+
         self.compress(zip_path, [correction.correction_file, task.wav_file])
         #zip_file = open(zip_path, 'rb')
         try:
@@ -288,6 +301,13 @@ class GetMediaUrlApi(APIView):
             return Response({'error': "There is no task with given taskId."} \
                                 , status=status.HTTP_404_NOT_FOUND) 
         mediaPath = str(task.media_file)
+        if not os.path.exists(mediaPath):
+            d = mediaPath.rsplit("/",1)[0]
+            for fs in os.listdir(d):
+                if "__upload" in fs:
+                    print("...")
+                    mediaPath = os.path.join(d, fs)
+                
 
         #mediaUrl = "https://i13hpc29.ira.uka.de/media/" + str(mediaPath.split("media/")[-1])
         mediaUrl = sec_settings.media_url + str(mediaPath.split("media/")[-1])
