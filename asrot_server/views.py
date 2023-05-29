@@ -129,8 +129,8 @@ class GetCorrectedListApi(APIView):
         page = paginator.paginate_queryset(queryset, request, self)     
         serializer = self.OutputSerializer(page, many=True)      
  
-        return paginator.get_paginated_response(serializer.data)
-
+        #return paginator.get_paginated_response(serializer.data)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 class GetCSVLinksApi(APIView):
     permission_classes = [IsAuthenticated]
@@ -604,7 +604,7 @@ class CheckHashStatusApi(APIView):
                 res["duration"] = "NULL"
                 out_serializer = self.OutputSerializer(instance=res)
                 return Response(out_serializer.data, status=status.HTTP_200_OK)
-              if task.status == "failed" or task.status != "done":
+              if task.status == "failed": #or task.status != "done":
                 self.handle_failed_task(task)
               res["exists"] = True
               res["status"] = task.status
@@ -748,7 +748,7 @@ class GetAllTasksView(APIView):
 
     #TODO configure default paginator in settings and switch to generic view
     class Paginator(pagination.PageNumberPagination):
-        page_size = 100
+        page_size = 300
         page_query_param = 'page'
         page_size_query_param = 'items_per_page'
 
