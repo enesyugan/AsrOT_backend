@@ -129,8 +129,8 @@ class GetCorrectedListApi(APIView):
         page = paginator.paginate_queryset(queryset, request, self)     
         serializer = self.OutputSerializer(page, many=True)      
  
-        #return paginator.get_paginated_response(serializer.data)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        return paginator.get_paginated_response(serializer.data)
+        #return Response(serializer.data, status=status.HTTP_200_OK)
 
 class GetCSVLinksApi(APIView):
     permission_classes = [IsAuthenticated]

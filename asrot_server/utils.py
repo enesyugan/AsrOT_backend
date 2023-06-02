@@ -289,6 +289,8 @@ def pipe(task: models.TranscriptionTask, audio, file_ext):
         segmentation = ""
         text_hypo = ""
         s_e_text = ""
+        prev_end = ""
+        text_starte = False
         for line in mediator_res:
             print(line)
             print(type(line))
@@ -302,13 +304,26 @@ def pipe(task: models.TranscriptionTask, audio, file_ext):
                 print(line)
                 start = line["start"]
                 end = line["end"]
+                if not text_starte:
+                    prev_end = start
+                    text_starte = True
+                if (start-prev_end) > 1.0:
+                    insec_start = prev_end
+                    insec_end = start
+                    insec_text = "<empty>"+"\n"
+                    text_hypo += insec_text
+                    insec_s_e_text_line = "{} {} {}".format(insec_start, insec_end, insec_text)
+                    s_e_text += insec_s_e_text_line
+                    segmentation += (task.audio_filename+"-%07d_%07d"%(insec_start*100,insec_end*100)+" "+task.audio_filename+" %.2f %.2f"%(insec_start,insec_end)+"\n")
+                prev_end = end
                 text = line.get("seq", "None")
                 text = text.strip() + "\n"
                 text_hypo += text
                 s_e_text_line = "{} {} {}".format(start, end, text)
                 s_e_text += s_e_text_line
                 segmentation += (task.audio_filename+"-%07d_%07d"%(start*100,end*100)+" "+task.audio_filename+" %.2f %.2f"%(start,end)+"\n")
-
+                            
+    
         task.seg_file.save('unused-name', base_files.ContentFile(segmentation))
         
         print('Segmentation done')
