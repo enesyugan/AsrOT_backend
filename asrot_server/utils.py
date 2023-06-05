@@ -305,7 +305,7 @@ def pipe(task: models.TranscriptionTask, audio, file_ext):
                 start = line["start"]
                 end = line["end"]
                 if not text_starte:
-                    prev_end = start
+                    prev_end = 0#start
                     text_starte = True
                 if (start-prev_end) > 1.0:
                     insec_start = prev_end
