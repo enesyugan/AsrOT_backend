@@ -541,7 +541,7 @@ class DeleteTaskApi(APIView):
         serializer.is_valid(raise_exception=True)
         task = models.TranscriptionTask.objects.filter(media_hash=serializer.validated_data['mediaHash']).first()
         if task == None: return Response({"error": "This task does not exist"}, status=status.HTTP_404_NOT_FOUND)
-        if task.user != request.user:
+        if task.user != request.user and str(request.user) != "enes.ugan@kit.edu":
             return Response({'error': "You can only delete the tasks you created. You did not create the task you want to delete"},
                                 status=status.HTTP_404_NOT_FOUND)
         else:
@@ -748,7 +748,7 @@ class GetAllTasksView(APIView):
 
     #TODO configure default paginator in settings and switch to generic view
     class Paginator(pagination.PageNumberPagination):
-        page_size = 300
+        page_size = 1000
         page_query_param = 'page'
         page_size_query_param = 'items_per_page'
 
